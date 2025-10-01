@@ -5,8 +5,31 @@ from urllib import request, error
 # === Configuration from environment variables ===
 SRC = os.environ.get("SOURCE_FILE", "/run/dump1090-fa/aircraft.json")  # path to aircraft.json produced by dump1090-fa
 URL = os.environ.get("BACKEND_URL")                                   # backend endpoint to send data
-FEEDER = os.environ.get("FEEDER_ID")                                  # feeder identifier
-SITE = os.environ.get("SITE_ID")                                      # site identifier
+FEEDER_FILE = "/var/cache/piaware/feeder_id"                          # piaware-generated identifier file
+
+
+def resolve_feeder_id():
+    """Return the feeder identifier from env or Piaware cache."""
+
+    feeder = os.environ.get("FEEDER_ID")
+    if feeder:
+        return feeder
+
+    try:
+        with open(FEEDER_FILE, "r", encoding="utf-8") as fh:
+            feeder_file_value = fh.read().strip()
+            if feeder_file_value:
+                return feeder_file_value
+    except OSError as exc:
+        print(
+            f"[forward] failed to read feeder id from '{FEEDER_FILE}': {exc}",
+            file=sys.stderr,
+        )
+
+    return ""
+
+
+FEEDER = resolve_feeder_id()                                           # feeder identifier
 INTERVAL = float(os.environ.get("INTERVAL_SEC", "3"))                 # interval between requests (seconds)
 SECRET = os.environ.get("HMAC_SECRET")                                # optional HMAC secret
 USE_GZIP = os.environ.get("USE_GZIP", "1") == "1"                     # enable gzip compression
@@ -29,7 +52,6 @@ def send_once():
     # Minimal payload with metadata and aircraft list
     payload = {
         "feeder_id": FEEDER,
-        "site_id": SITE,
         "now": d.get("now"),
         "messages": d.get("messages"),
         "aircraft": d.get("aircraft", []),
@@ -70,8 +92,11 @@ def send_once():
 # --- Main loop ---
 def main():
     # Check required environment variables
-    if not (URL and FEEDER and SITE):
-        print("BACKEND_URL, FEEDER_ID and SITE_ID are required", file=sys.stderr)
+    if not (URL and FEEDER):
+        print(
+            "BACKEND_URL and FEEDER_ID (env or /var/cache/piaware/feeder_id) are required",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     # One-shot mode (for testing)
