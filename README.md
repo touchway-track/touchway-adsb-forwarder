@@ -97,6 +97,10 @@ docker compose -f docker-compose.prod.yml up -d
    docker compose -f docker-compose.prod.yml config
    ```
 
+   The production compose file bind-mounts both `/run/dump1090-fa/aircraft.json` **and** `/var/cache/piaware/feeder_id` from the host
+   so the container can stream aircraft data and automatically detect the Piaware feeder ID. If you customize the stack, make sure
+   those mounts remain in place or provide equivalent environment variables (`SOURCE_FILE` / `FEEDER_ID`).
+
    Compose evaluates variables in this order. Later sources override earlier ones, so exporting a value in your shell (or passing a different `--env-file`) will win over the defaults baked into the compose files:
 
    | Priority | Source                                        | Notes |

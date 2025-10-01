@@ -17,6 +17,7 @@ services:
     volumes:
       - /opt/adsb-forwarder/forward.py:/app/forward.py:ro
       - /run/dump1090-fa/aircraft.json:/run/dump1090-fa/aircraft.json:ro
+      - /var/cache/piaware/feeder_id:/var/cache/piaware/feeder_id:ro
     command: ["python", "/app/forward.py"]
     environment:
       BACKEND_URL: ${BACKEND_URL:?Set BACKEND_URL}
