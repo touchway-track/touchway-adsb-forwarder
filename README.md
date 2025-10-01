@@ -25,8 +25,9 @@ adsb-forwarder/
 ├─ examples/
 │  ├─ aircraft.sample.json     # Sample aircraft JSON for testing
 ├─ dev.env                     # Default env vars consumed by docker-compose.dev.yml
+├─ .docker/
+│  └─ dev.env                  # Non-sensitive defaults for manual Docker runs
 ├─ docker/
-│  └─ env                      # Non-sensitive defaults for manual Docker runs
 ├─ .env.example                # Template you can copy for other deployments
 ├─ docker-compose.dev.yml      # Local dev stack (forwarder only)
 ├─ docker-compose.prod.yml     # Production stack (forwarder only)
@@ -50,7 +51,7 @@ docker compose -f docker-compose.dev.yml up --build
 
 - The forwarder reads `examples/aircraft.sample.json` and sends it every few seconds.
 - `docker-compose.dev.yml` loads `dev.env`; edit that file to point at your local backend (e.g., `BACKEND_URL=http://localhost:8080/adsb/ingest`).
-- Prefer `docker run` over Compose? The committed `docker/env` file mirrors the same localhost defaults for quick experiments.
+- Prefer `docker run` over Compose? The committed `.docker/dev.env` file mirrors the same localhost defaults for quick experiments.
 - To preview the final configuration with your overrides applied, run:
 
   ```bash
