@@ -157,6 +157,41 @@ docker logs -f adsb-forwarder
 - Optional request signing with HMAC.
 - Can be deployed on a private tailnet (e.g., via Tailscale).
 
+### HMAC request signing
+
+The forwarder can sign each payload with an **HMAC-SHA256** digest so the backend can prove the data really came from your feeder
+and was not tampered with in transit. This strategy uses a shared secret (`HMAC_SECRET`) that exists only on the feeder and the
+receiving API.
+
+#### When to use it
+
+- **Production** deployments should always enable HMAC by setting the `HMAC_SECRET` environment variable. The secret can be any
+  sufficiently random string (for example, 32+ bytes generated with `openssl rand -hex 32`).
+- **Development** environments may omit the variable to simplify local testing. When `HMAC_SECRET` is unset the forwarder skips
+  signing entirely.
+
+#### How it works
+
+1. The forwarder serializes the request body as JSON.
+2. It computes `HMAC_SHA256(secret=HMAC_SECRET, message=payload_bytes)`.
+3. The resulting digest is hex-encoded and attached to the HTTP request as the `X-ADSB-Signature` header.
+
+Because HMAC uses the shared secret on both ends, any change to the payload or missing/incorrect secret causes the server to
+calculate a different digest and reject the request.
+
+#### Backend expectations
+
+Your API should perform the same computation before accepting a payload:
+
+1. Read the raw request body exactly as received.
+2. Recreate the HMAC using the shared secret (`HMAC_SECRET`).
+3. Compare the digest to the value from the `X-ADSB-Signature` header using a **constant-time** comparison routine to avoid
+   timing attacks.
+4. Reject the request (e.g., HTTP 401/403) if the header is missing or the signature does not match.
+
+If you are building a new endpoint, require both the `X-ADSB-Signature` header and the usual metadata (`FEEDER_ID`, `SITE_ID`) so
+the backend can associate the signing secret with the correct feeder record.
+
 ---
 
 ## Development Notes
