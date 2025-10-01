@@ -84,9 +84,44 @@ def send_once():
         with request.urlopen(req, timeout=TIMEOUT) as r:
             print(f"[forward] {r.status} aircraft={len(payload['aircraft'])}")
             return True
-    except Exception as e:
-        # Log errors to stderr
-        print(f"[forward] error: {e}", file=sys.stderr)
+    except error.HTTPError as http_err:
+        body_preview = ""
+        try:
+            body_bytes = http_err.read() if http_err.fp else b""
+        except Exception as body_exc:  # pragma: no cover - defensive logging only
+            body_preview = f"<failed to read error body: {body_exc}>"
+        else:
+            if body_bytes:
+                decoded = body_bytes.decode("utf-8", errors="replace")
+                truncated = decoded[:500]
+                if len(decoded) > 500:
+                    truncated += "... (truncated)"
+                body_preview = truncated
+
+        message = (
+            f"[forward] http error {http_err.code} {http_err.reason} while POSTing {http_err.url or URL} "
+            f"(feeder={FEEDER or '<unset>'}, aircraft={len(payload['aircraft'])}, timeout={TIMEOUT}s, gzip={'on' if USE_GZIP else 'off'})"
+        )
+        print(message, file=sys.stderr)
+
+        suggestion = (
+            "[forward] hint: verify BACKEND_URL matches a valid endpoint and that the backend allows POST requests for this path."
+        )
+        print(suggestion, file=sys.stderr)
+
+        if body_preview:
+            print(f"[forward] response body: {body_preview}", file=sys.stderr)
+
+        return False
+    except error.URLError as url_err:
+        print(
+            f"[forward] network error while reaching {URL}: {url_err.reason}",
+            file=sys.stderr,
+        )
+        return False
+    except Exception as exc:  # pragma: no cover - fallback guard
+        # Log unexpected errors to stderr
+        print(f"[forward] unexpected error: {exc}", file=sys.stderr)
         return False
 
 # --- Main loop ---
