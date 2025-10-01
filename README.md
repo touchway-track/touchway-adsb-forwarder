@@ -14,7 +14,6 @@ This project is designed to run both locally (for development/testing) and on pr
 - Configurable interval and timeout.
 - Minimal dependencies (stdlib only).
 - Runs as a Docker container (slim Python image).
-- Includes a mock backend for local testing.
 
 ---
 
@@ -26,8 +25,7 @@ adsb-forwarder/
 ├─ examples/
 │  ├─ forwarder.env.example    # Example environment config
 │  ├─ aircraft.sample.json     # Sample aircraft JSON for testing
-│  └─ mock_backend.py          # Local mock server to receive POSTs
-├─ docker-compose.dev.yml      # Local dev stack (mock backend + forwarder)
+├─ docker-compose.dev.yml      # Local dev stack (forwarder only)
 ├─ docker-compose.prod.yml     # Production stack (forwarder only)
 ├─ Dockerfile                  # Docker build definition
 ├─ .dockerignore
@@ -40,28 +38,26 @@ adsb-forwarder/
 
 ### 1. Development (local, without feeder)
 
-Run the forwarder against a mock backend using the sample JSON.
+Run the forwarder against your locally running backend using the sample JSON from this repository.
 
 ```bash
-docker compose -f docker-compose.dev.yml up --build
+docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml up --build
 ```
 
-- The mock backend runs on port `8081`.
 - The forwarder reads `examples/aircraft.sample.json` and sends it every few seconds.
-- Logs will show both sides (forwarder sends, mock receives).
-- Environment variables have sensible defaults baked into `docker-compose.dev.yml`. If you need to override them, drop a file such as `docker/dev.env/forwarder.dev.env` (git-ignored) with `KEY=value` pairs and start the stack with:
+- Provide your backend URL via `docker/dev.env/forwarder.dev.env` (git-ignored) or shell exports. A minimal example env file looks like:
 
-  ```bash
-  docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml up --build
+  ```
+  BACKEND_URL=http://localhost:8080/adsb/ingest
+  FEEDER_ID=ff-dev-yourname
+  SITE_ID=local-lab
   ```
 
-  Any values defined in the override file (or exported in your shell) will replace the defaults.
+- Render the composed configuration to confirm which values will be injected:
 
   ```bash
   docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml config
   ```
-
-  Use the `config` view above to confirm what Compose will pass to the container when debugging environment overrides.
 
 ### 2. Production (on feeder)
 
@@ -168,7 +164,6 @@ docker logs -f adsb-forwarder
 
 ## Development Notes
 
-- `mock_backend.py` is useful for validating payloads before hitting your real API.
 - The project is intentionally minimal (no external Python libs) for compatibility with constrained devices.
 - For production, you may want to version-pin the Python slim image and monitor CVEs.
 

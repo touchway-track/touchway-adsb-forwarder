@@ -17,7 +17,7 @@ docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev
 Example file contents:
 
 ```
-BACKEND_URL=http://mock-backend:8081/adsb/ingest
+BACKEND_URL=http://localhost:8080/adsb/ingest
 FEEDER_ID=ff-dev-yourname
 SITE_ID=local-lab
 ```
