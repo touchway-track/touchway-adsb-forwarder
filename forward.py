@@ -19,8 +19,12 @@ def sign(raw: bytes):
 # --- Send one batch of aircraft data ---
 def send_once():
     # Load JSON data from the dump1090 aircraft file
-    with open(SRC, "r", encoding="utf-8") as f:
-        d = json.load(f)
+    try:
+        with open(SRC, "r", encoding="utf-8") as f:
+            d = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
+        print(f"[forward] failed to read source file '{SRC}': {exc}", file=sys.stderr)
+        return False
 
     # Minimal payload with metadata and aircraft list
     payload = {
