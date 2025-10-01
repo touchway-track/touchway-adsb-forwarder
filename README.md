@@ -57,44 +57,73 @@ docker compose -f docker-compose.dev.yml up --build
 
   Any values defined in the override file (or exported in your shell) will replace the defaults.
 
+  ```bash
+  docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml config
+  ```
+
+  Use the `config` view above to confirm what Compose will pass to the container when debugging environment overrides.
+
 ### 2. Production (on feeder)
 
-1. Copy the repo files to your feeder device (e.g., Raspberry Pi).
-2. Decide how you want to provide secrets/configuration:
+1. Copy the repo files to your feeder device (e.g., Raspberry Pi). A common layout is to clone into `/opt/adsb-forwarder`:
 
-   - **Shell exports (e.g., `.bashrc`)** – add the required variables and reload your shell:
+   ```bash
+   sudo install -d -m 755 /opt/adsb-forwarder
+   sudo chown "$USER":"$USER" /opt/adsb-forwarder
+   git clone https://github.com/touchway/touchway-adsb-forwarder.git /opt/adsb-forwarder
+   ```
 
-     ```bash
-     export BACKEND_URL="https://your-backend/api/adsb/ingest"
-     export FEEDER_ID="ff-vcp-01"
-     export SITE_ID="vcp-site"
-     export HMAC_SECRET="supersecret"
-     export INTERVAL_SEC=3
-     export USE_GZIP=1
-     export HTTP_TIMEOUT_SEC=5
-     export SOURCE_FILE=/run/dump1090-fa/aircraft.json
-     ```
+   Adjust the Git URL if you deploy from a fork.
 
-     You can place those `export` lines in `~/.bashrc` or `~/.profile` so they persist across sessions.
+2. Provision an environment file on the device (recommended for both manual runs and systemd):
 
-   - **Dedicated env file** – copy `examples/forwarder.env.example`, fill in your values, and pass it to Compose when launching:
+   ```bash
+   sudo cp /opt/adsb-forwarder/examples/forwarder.env.example /opt/adsb-forwarder/forwarder.env
+   sudo nano /opt/adsb-forwarder/forwarder.env  # fill in BACKEND_URL/FEEDER_ID/SITE_ID/etc.
+   ```
 
-     ```bash
-     cp examples/forwarder.env.example forwarder.prod.env
-     # edit forwarder.prod.env with your secrets
-     ```
+   > **Why not `~/.bashrc`?** Shell exports only exist for your interactive session; services started at boot (e.g., via systemd) won’t inherit them. A dedicated env file at `/opt/adsb-forwarder/forwarder.env` works for both manual and automated starts while keeping secrets out of your shell history.
 
-3. Deploy with Docker Compose (choose the approach that matches how you supplied the variables):
+   The repository’s `.gitignore` already excludes `forwarder.env`/`*.env`, so you won’t accidentally commit secrets.
+
+3. Deploy with Docker Compose (the production file already references `/opt/adsb-forwarder/forwarder.env` via `env_file`):
 
 ```bash
 cd /opt/adsb-forwarder
-# Drop the --env-file flag if you exported variables instead of using a file.
-docker compose \
-  --env-file forwarder.prod.env \
-  -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-4. Check logs:
+   To double-check how variables resolve before starting the stack, inspect the rendered configuration:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml config
+   ```
+
+   > Compose evaluates variables in this order: current shell (or systemd service environment), values from `--env-file`, `.env` next to the compose file, and finally the `env_file` entries. Later sources override earlier ones, so you can still override a value temporarily by exporting it before running Compose.
+
+4. (Optional) Manage the service with systemd so it starts on boot. This unit assumes the repo lives in `/opt/adsb-forwarder` and uses the same env file:
+
+   ```ini
+   # /etc/systemd/system/adsb-forwarder-compose.service
+   [Unit]
+   Description=ADSB forwarder via Docker Compose
+   After=docker.service network-online.target
+   Wants=docker.service network-online.target
+
+   [Service]
+   Type=oneshot
+   RemainAfterExit=yes
+   WorkingDirectory=/opt/adsb-forwarder
+   ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
+   ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+   Enable it with `sudo systemctl enable --now adsb-forwarder-compose.service`.
+
+5. Check logs:
 
 ```bash
 docker logs -f adsb-forwarder
