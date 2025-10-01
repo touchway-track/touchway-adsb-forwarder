@@ -8,7 +8,7 @@ services:
     command: ["python", "forward.py"]
     restart: unless-stopped
     environment:
-      BACKEND_URL: ${BACKEND_URL:?BACKEND_URL must be provided (e.g. http://localhost:8080/adsb/ingest)}
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:8080/adsb/ingest}
       FEEDER_ID: ${FEEDER_ID:-ff-poc-01}
       SITE_ID: ${SITE_ID:-site-poc}
       HMAC_SECRET: ${HMAC_SECRET:-}

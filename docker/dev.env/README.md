@@ -1,25 +1,15 @@
 # Development environment overrides
 
-Place per-developer Compose overrides here, e.g. `forwarder.dev.env`.
+Compose automatically loads `.env` files that sit next to the compose
+configuration. For most local development, copy `.env.example` to `.env`
+and edit it instead of dropping files in this directory.
 
-Add `KEY=value` lines to the file and point Docker Compose at it:
-
-```bash
-docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml up --build
-```
-
-To preview what Compose will inject, render the combined config:
+If you prefer to keep multiple variants (e.g., `.env.qa`, `.env.lab`),
+store them here and point Compose at the desired one explicitly:
 
 ```bash
-docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml config
+docker compose --env-file docker/dev.env/forwarder.lab.env -f docker-compose.dev.yml up --build
 ```
 
-Example file contents:
-
-```
-BACKEND_URL=http://localhost:8080/adsb/ingest
-FEEDER_ID=ff-dev-yourname
-SITE_ID=local-lab
-```
-
-This directory is git-ignored so secrets stay local.
+Because this folder stays git-ignored, any secrets or experimental
+overrides you add will remain local.

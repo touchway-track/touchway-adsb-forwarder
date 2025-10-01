@@ -17,9 +17,9 @@ It complements the human-friendly `README.md` by documenting extra details codin
 
 ### Local Development
 
-- Use `docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml up --build` to run the forwarder against your local backend.
+- Use `docker compose -f docker-compose.dev.yml up --build` to run the forwarder against your local backend (Compose loads `.env` automatically).
 - Forwarder reads from `examples/aircraft.sample.json` instead of a real feeder.
-- Provide backend connection details via env vars or the `docker/dev.env/forwarder.dev.env` file.
+- Provide backend connection details via env vars or the repository-level `.env` (copy from `.env.example`).
 
 ### Python Environment
 

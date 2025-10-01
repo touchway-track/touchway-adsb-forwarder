@@ -25,6 +25,7 @@ adsb-forwarder/
 ├─ examples/
 │  ├─ forwarder.env.example    # Example environment config
 │  ├─ aircraft.sample.json     # Sample aircraft JSON for testing
+├─ .env.example                # Development defaults loaded by Docker Compose
 ├─ docker-compose.dev.yml      # Local dev stack (forwarder only)
 ├─ docker-compose.prod.yml     # Production stack (forwarder only)
 ├─ Dockerfile                  # Docker build definition
@@ -41,22 +42,16 @@ adsb-forwarder/
 Run the forwarder against your locally running backend using the sample JSON from this repository.
 
 ```bash
-docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml up --build
+cp .env.example .env               # first time only; edit .env to match your backend
+docker compose -f docker-compose.dev.yml up --build
 ```
 
 - The forwarder reads `examples/aircraft.sample.json` and sends it every few seconds.
-- Provide your backend URL via `docker/dev.env/forwarder.dev.env` (git-ignored) or shell exports. A minimal example env file looks like:
-
-  ```
-  BACKEND_URL=http://localhost:8080/adsb/ingest
-  FEEDER_ID=ff-dev-yourname
-  SITE_ID=local-lab
-  ```
-
-- Render the composed configuration to confirm which values will be injected:
+- Compose automatically loads `.env`; edit it to point to your local backend (e.g., `BACKEND_URL=http://localhost:8080/adsb/ingest`).
+- To preview the final configuration with your overrides applied, run:
 
   ```bash
-  docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml config
+  docker compose -f docker-compose.dev.yml config
   ```
 
 ### 2. Production (on feeder)
@@ -141,7 +136,7 @@ docker logs -f adsb-forwarder
 
 | Variable           | Description                                        | Default |
 |--------------------|----------------------------------------------------|---------|
-| `BACKEND_URL`      | Target API endpoint                                | **req** |
+| `BACKEND_URL`      | Target API endpoint                                | `http://localhost:8080/adsb/ingest` (dev) |
 | `FEEDER_ID`        | Unique feeder identifier                           | **req** |
 | `SITE_ID`          | Site identifier                                    | **req** |
 | `HMAC_SECRET`      | Secret key for signing payloads (required in prod) | **req** |
