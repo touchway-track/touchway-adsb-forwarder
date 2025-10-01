@@ -139,6 +139,6 @@ docker logs -f adsb-forwarder
 - If modifying CI workflows: keep build matrix for `arm/v7` (Raspberry Pi 3), `arm64` (Pi 4), and `amd64` ( local/dev).
 - If updating Docker base image: bump patchversion only (e.g., `3.12.6 → 3.12.7`).
 - Keep `forward.py` dependency-free unless absolutely necessary.
-- When changing `forwarder.env` keys: update `README.md` and `examples/forwarder.env.example`.
+- When changing `forwarder.env` keys: update `README.md` and `.env.example`.
 
 ---

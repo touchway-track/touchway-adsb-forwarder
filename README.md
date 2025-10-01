@@ -23,9 +23,9 @@ This project is designed to run both locally (for development/testing) and on pr
 adsb-forwarder/
 ├─ forward.py                  # Main forwarder script
 ├─ examples/
-│  ├─ forwarder.env.example    # Example environment config
 │  ├─ aircraft.sample.json     # Sample aircraft JSON for testing
-├─ .env.example                # Development defaults loaded by Docker Compose
+├─ dev.env                     # Default env vars consumed by docker-compose.dev.yml
+├─ .env.example                # Template you can copy for other deployments
 ├─ docker-compose.dev.yml      # Local dev stack (forwarder only)
 ├─ docker-compose.prod.yml     # Production stack (forwarder only)
 ├─ Dockerfile                  # Docker build definition
@@ -42,12 +42,12 @@ adsb-forwarder/
 Run the forwarder against your locally running backend using the sample JSON from this repository.
 
 ```bash
-cp .env.example .env               # first time only; edit .env to match your backend
+# optional: tweak dev.env if your backend isn't on localhost
 docker compose -f docker-compose.dev.yml up --build
 ```
 
 - The forwarder reads `examples/aircraft.sample.json` and sends it every few seconds.
-- Compose automatically loads `.env`; edit it to point to your local backend (e.g., `BACKEND_URL=http://localhost:8080/adsb/ingest`).
+- `docker-compose.dev.yml` loads `dev.env`; edit that file to point at your local backend (e.g., `BACKEND_URL=http://localhost:8080/adsb/ingest`).
 - To preview the final configuration with your overrides applied, run:
 
   ```bash
@@ -69,7 +69,7 @@ docker compose -f docker-compose.dev.yml up --build
 2. Provision an environment file on the device (recommended for both manual runs and systemd):
 
    ```bash
-   sudo cp /opt/adsb-forwarder/examples/forwarder.env.example /opt/adsb-forwarder/forwarder.env
+   sudo cp /opt/adsb-forwarder/.env.example /opt/adsb-forwarder/forwarder.env
    sudo nano /opt/adsb-forwarder/forwarder.env  # fill in BACKEND_URL/FEEDER_ID/SITE_ID/etc.
    ```
 

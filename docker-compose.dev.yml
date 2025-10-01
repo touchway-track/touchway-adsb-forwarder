@@ -7,15 +7,8 @@ services:
     working_dir: /app
     command: ["python", "forward.py"]
     restart: unless-stopped
-    environment:
-      BACKEND_URL: ${BACKEND_URL:-http://localhost:8080/adsb/ingest}
-      FEEDER_ID: ${FEEDER_ID:-ff-poc-01}
-      SITE_ID: ${SITE_ID:-site-poc}
-      HMAC_SECRET: ${HMAC_SECRET:-}
-      INTERVAL_SEC: ${INTERVAL_SEC:-3}
-      USE_GZIP: ${USE_GZIP:-1}
-      HTTP_TIMEOUT_SEC: ${HTTP_TIMEOUT_SEC:-5}
-      SOURCE_FILE: ${SOURCE_FILE:-/data/aircraft.json}
+    env_file:
+      - ./dev.env
     volumes:
       - ./forward.py:/app/forward.py:ro
       - ./examples/aircraft.sample.json:/data/aircraft.json:ro
