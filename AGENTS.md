@@ -17,9 +17,9 @@ It complements the human-friendly `README.md` by documenting extra details codin
 
 ### Local Development
 
-- Use `docker compose -f docker-compose.dev.yml up --build` to spin up forwarder + mock backend.
+- Use `docker compose -f docker-compose.dev.yml up --build` to run the forwarder against your local backend (Compose loads `.env` automatically).
 - Forwarder reads from `examples/aircraft.sample.json` instead of a real feeder.
-- Mock backend (`examples/mock_backend.py`) listens on port `8081` for incoming POSTs.
+- Provide backend connection details via env vars or the repository-level `.env` (copy from `.env.example`).
 
 ### Python Environment
 
@@ -72,7 +72,7 @@ pytest -v
 ### Integration Testing
 
 - Use `docker-compose.dev.yml` to simulate data flow.
-- Verify that the forwarder sends payloads and mock backend receives them.
+- Verify that the forwarder sends payloads to your locally running backend.
 
 ---
 
@@ -139,6 +139,6 @@ docker logs -f adsb-forwarder
 - If modifying CI workflows: keep build matrix for `arm/v7` (Raspberry Pi 3), `arm64` (Pi 4), and `amd64` ( local/dev).
 - If updating Docker base image: bump patchversion only (e.g., `3.12.6 → 3.12.7`).
 - Keep `forward.py` dependency-free unless absolutely necessary.
-- When changing `forwarder.env` keys: update `README.md` and `examples/forwarder.env.example`.
+- When changing `forwarder.env` keys: update `README.md` and `.env.example`.
 
 ---

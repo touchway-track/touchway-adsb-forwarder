@@ -14,7 +14,6 @@ This project is designed to run both locally (for development/testing) and on pr
 - Configurable interval and timeout.
 - Minimal dependencies (stdlib only).
 - Runs as a Docker container (slim Python image).
-- Includes a mock backend for local testing.
 
 ---
 
@@ -24,10 +23,11 @@ This project is designed to run both locally (for development/testing) and on pr
 adsb-forwarder/
 ├─ forward.py                  # Main forwarder script
 ├─ examples/
-│  ├─ forwarder.env.example    # Example environment config
 │  ├─ aircraft.sample.json     # Sample aircraft JSON for testing
-│  └─ mock_backend.py          # Local mock server to receive POSTs
-├─ docker-compose.dev.yml      # Local dev stack (mock backend + forwarder)
+├─ .docker/
+│  └─ dev.env                  # Default env vars consumed by docker-compose.dev.yml
+├─ .env.example                # Template you can copy for other deployments
+├─ docker-compose.dev.yml      # Local dev stack (forwarder only)
 ├─ docker-compose.prod.yml     # Production stack (forwarder only)
 ├─ Dockerfile                  # Docker build definition
 ├─ .dockerignore
@@ -40,28 +40,21 @@ adsb-forwarder/
 
 ### 1. Development (local, without feeder)
 
-Run the forwarder against a mock backend using the sample JSON.
+Run the forwarder against your locally running backend using the sample JSON from this repository.
 
 ```bash
+# optional: copy .docker/dev.env and tweak if your backend isn't on localhost
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-- The mock backend runs on port `8081`.
 - The forwarder reads `examples/aircraft.sample.json` and sends it every few seconds.
-- Logs will show both sides (forwarder sends, mock receives).
-- Environment variables have sensible defaults baked into `docker-compose.dev.yml`. If you need to override them, drop a file such as `docker/dev.env/forwarder.dev.env` (git-ignored) with `KEY=value` pairs and start the stack with:
+- `docker-compose.dev.yml` loads `.docker/dev.env`; copy or edit that file to point at your local backend (e.g., `BACKEND_URL=http://localhost:8080/adsb/ingest`).
+- Prefer `docker run` over Compose? Mount `.docker/dev.env` (or a copy) to reuse the same localhost defaults for quick experiments.
+- To preview the final configuration with your overrides applied, run:
 
   ```bash
-  docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml up --build
+  docker compose -f docker-compose.dev.yml config
   ```
-
-  Any values defined in the override file (or exported in your shell) will replace the defaults.
-
-  ```bash
-  docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml config
-  ```
-
-  Use the `config` view above to confirm what Compose will pass to the container when debugging environment overrides.
 
 ### 2. Production (on feeder)
 
@@ -78,7 +71,7 @@ docker compose -f docker-compose.dev.yml up --build
 2. Provision an environment file on the device (recommended for both manual runs and systemd):
 
    ```bash
-   sudo cp /opt/adsb-forwarder/examples/forwarder.env.example /opt/adsb-forwarder/forwarder.env
+   sudo cp /opt/adsb-forwarder/.env.example /opt/adsb-forwarder/forwarder.env
    sudo nano /opt/adsb-forwarder/forwarder.env  # fill in BACKEND_URL/FEEDER_ID/SITE_ID/etc.
    ```
 
@@ -145,7 +138,7 @@ docker logs -f adsb-forwarder
 
 | Variable           | Description                                        | Default |
 |--------------------|----------------------------------------------------|---------|
-| `BACKEND_URL`      | Target API endpoint                                | **req** |
+| `BACKEND_URL`      | Target API endpoint                                | `http://localhost:8080/adsb/ingest` (dev) |
 | `FEEDER_ID`        | Unique feeder identifier                           | **req** |
 | `SITE_ID`          | Site identifier                                    | **req** |
 | `HMAC_SECRET`      | Secret key for signing payloads (required in prod) | **req** |
@@ -168,7 +161,6 @@ docker logs -f adsb-forwarder
 
 ## Development Notes
 
-- `mock_backend.py` is useful for validating payloads before hitting your real API.
 - The project is intentionally minimal (no external Python libs) for compatibility with constrained devices.
 - For production, you may want to version-pin the Python slim image and monitor CVEs.
 
