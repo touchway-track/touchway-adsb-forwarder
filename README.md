@@ -99,7 +99,17 @@ docker compose -f docker-compose.prod.yml up -d
    docker compose -f docker-compose.prod.yml config
    ```
 
-   > Compose evaluates variables in this order: current shell (or systemd service environment), values from `--env-file`, `.env` next to the compose file, and finally the `env_file` entries. Later sources override earlier ones, so you can still override a value temporarily by exporting it before running Compose.
+   Compose evaluates variables in this order. Later sources override earlier ones, so exporting a value in your shell (or passing a different `--env-file`) will win over the defaults baked into the compose files:
+
+   | Priority | Source                                        | Notes |
+   |----------|-----------------------------------------------|-------|
+   | 1        | Shell exports / systemd unit `Environment=`   | Highest precedence; great for one-off overrides |
+   | 2        | `docker compose --env-file path.env`          | Useful for swapping between env files without editing compose |
+   | 3        | `.env` beside the compose file                | Automatically picked up if present |
+   | 4        | `env_file:` entries inside the compose stack  | Where production defaults like `/opt/adsb-forwarder/forwarder.env` live |
+   | 5        | Hardcoded `environment:` values in the compose| Final fallback defaults (e.g., `INTERVAL_SEC:-3`) |
+
+   When you provide a different `--env-file`, Compose replaces the values coming from `env_file:` entries. Document which file should be used in production (e.g., `/opt/adsb-forwarder/forwarder.env`) so operators know what will be overridden.
 
 4. (Optional) Manage the service with systemd so it starts on boot. This unit assumes the repo lives in `/opt/adsb-forwarder` and uses the same env file:
 
@@ -138,7 +148,7 @@ docker logs -f adsb-forwarder
 | `BACKEND_URL`      | Target API endpoint                                | **req** |
 | `FEEDER_ID`        | Unique feeder identifier                           | **req** |
 | `SITE_ID`          | Site identifier                                    | **req** |
-| `HMAC_SECRET`      | Secret key for signing payloads (optional)         | `""`    |
+| `HMAC_SECRET`      | Secret key for signing payloads (required in prod) | **req** |
 | `INTERVAL_SEC`     | Interval between sends (seconds)                   | `3`     |
 | `HTTP_TIMEOUT_SEC` | HTTP request timeout (seconds)                     | `5`     |
 | `USE_GZIP`         | Compress payload with Gzip (1 = enabled)           | `1`     |
