@@ -1,5 +1,5 @@
 # Dockerfile
-FROM python:3.12-slim
+FROM python:3.12.6-slim-bookworm
 
 # segurança & mínima superfície
 RUN useradd -u 10001 -r -s /usr/sbin/nologin appuser \
