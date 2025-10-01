@@ -17,11 +17,15 @@ services:
     working_dir: /app
     command: ["python", "forward.py"]
     restart: unless-stopped
-    env_file:
-      - ./examples/forwarder.env.example
     environment:
-      SOURCE_FILE: /data/aircraft.json
-      BACKEND_URL: http://mock-backend:8081/adsb/ingest
+      BACKEND_URL: ${BACKEND_URL:-http://mock-backend:8081/adsb/ingest}
+      FEEDER_ID: ${FEEDER_ID:-ff-poc-01}
+      SITE_ID: ${SITE_ID:-site-poc}
+      HMAC_SECRET: ${HMAC_SECRET:-}
+      INTERVAL_SEC: ${INTERVAL_SEC:-3}
+      USE_GZIP: ${USE_GZIP:-1}
+      HTTP_TIMEOUT_SEC: ${HTTP_TIMEOUT_SEC:-5}
+      SOURCE_FILE: ${SOURCE_FILE:-/data/aircraft.json}
     volumes:
       - ./forward.py:/app/forward.py:ro
       - ./examples/aircraft.sample.json:/data/aircraft.json:ro

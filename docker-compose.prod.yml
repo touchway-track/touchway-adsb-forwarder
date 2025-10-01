@@ -5,8 +5,6 @@ services:
     image: python:3.12.6-slim-bookworm
     container_name: adsb-forwarder
     restart: unless-stopped
-    env_file:
-      - /opt/adsb-forwarder/forwarder.env
     user: "10001:10001"
     working_dir: /app
     network_mode: host
@@ -20,6 +18,15 @@ services:
       - /opt/adsb-forwarder/forward.py:/app/forward.py:ro
       - /run/dump1090-fa/aircraft.json:/run/dump1090-fa/aircraft.json:ro
     command: ["python", "/app/forward.py"]
+    environment:
+      BACKEND_URL: ${BACKEND_URL:?Set BACKEND_URL (export it or provide via --env-file)}
+      FEEDER_ID: ${FEEDER_ID:?Set FEEDER_ID (export it or provide via --env-file)}
+      SITE_ID: ${SITE_ID:?Set SITE_ID (export it or provide via --env-file)}
+      HMAC_SECRET: ${HMAC_SECRET:-}
+      INTERVAL_SEC: ${INTERVAL_SEC:-3}
+      USE_GZIP: ${USE_GZIP:-1}
+      HTTP_TIMEOUT_SEC: ${HTTP_TIMEOUT_SEC:-5}
+      SOURCE_FILE: ${SOURCE_FILE:-/run/dump1090-fa/aircraft.json}
     healthcheck:
       test:
         [
