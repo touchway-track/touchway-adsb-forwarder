@@ -1,0 +1,34 @@
+version: "3.8"
+
+services:
+  forwarder:
+    image: python:3.12.6-slim-bookworm
+    container_name: adsb-forwarder
+    restart: unless-stopped
+    env_file:
+      - /opt/adsb-forwarder/forwarder.env
+    user: "10001:10001"
+    working_dir: /app
+    network_mode: host
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: ["ALL"]
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,mode=1777
+    volumes:
+      - /opt/adsb-forwarder/forward.py:/app/forward.py:ro
+      - /run/dump1090-fa/aircraft.json:/run/dump1090-fa/aircraft.json:ro
+    command: ["python", "/app/forward.py"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import os,sys,time; p='/run/dump1090-fa/aircraft.json'; import os,time,sys; st=os.stat(p); sys.exit(0 if time.time()-st.st_mtime<60 else 1)",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 20s

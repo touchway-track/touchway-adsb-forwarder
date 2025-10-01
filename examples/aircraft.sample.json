@@ -1,0 +1,24 @@
+{
+  "now": 1759324291.2,
+  "messages": 5276,
+  "aircraft": [
+    {
+      "hex": "e80333",
+      "alt_baro": 37000,
+      "messages": 8,
+      "seen": 1.2,
+      "rssi": -22.0
+    },
+    {
+      "hex": "e47f21",
+      "flight": "LTG8420",
+      "lat": -22.896194,
+      "lon": -46.964455,
+      "gs": 292.3,
+      "track": 338.5,
+      "messages": 278,
+      "seen": 0.4,
+      "rssi": -11.0
+    }
+  ]
+}
