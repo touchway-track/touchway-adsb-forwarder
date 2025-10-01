@@ -68,25 +68,30 @@ docker compose -f docker-compose.dev.yml up --build
 
    Adjust the Git URL if you deploy from a fork.
 
-2. Provision an environment file on the device (recommended for both manual runs and systemd):
+2. Export the required environment variables **before** starting Compose. Pick whichever method matches how you operate the host:
 
-   ```bash
-   sudo cp /opt/adsb-forwarder/.env.example /opt/adsb-forwarder/forwarder.env
-   sudo nano /opt/adsb-forwarder/forwarder.env  # fill in BACKEND_URL/FEEDER_ID/etc.
-   ```
+   - **Interactive shell or per-user startup files** – export the variables manually or add them to `~/.bashrc`/`~/.profile` so your login shell can run Compose:
 
-   > **Why not `~/.bashrc`?** Shell exports only exist for your interactive session; services started at boot (e.g., via systemd) won’t inherit them. A dedicated env file at `/opt/adsb-forwarder/forwarder.env` works for both manual and automated starts while keeping secrets out of your shell history.
+     ```bash
+     export BACKEND_URL="https://example.com/ingest"
+     export HMAC_SECRET="super-secret"
+     export FEEDER_ID="abcd-1234"
+     ```
 
-   The repository’s `.gitignore` already excludes `forwarder.env`/`*.env`, so you won’t accidentally commit secrets.
+   - **System-wide defaults** – add the key/value pairs to `/etc/environment` (or a file sourced from it) so every session sees them.
 
-3. Deploy with Docker Compose (the production file already references `/opt/adsb-forwarder/forwarder.env` via `env_file`):
+   - **Service-specific environment file** – create something like `/etc/adsb-forwarder.env` with `VAR=value` lines and reference it from systemd (see below) or `source` it before running Compose.
+
+   The repository’s `.gitignore` already excludes `*.env`, so you can safely keep your secrets in a dedicated file.
+
+3. Deploy with Docker Compose:
 
 ```bash
 cd /opt/adsb-forwarder
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-   To double-check how variables resolve before starting the stack, inspect the rendered configuration:
+   Before starting the stack, inspect the rendered configuration to confirm the variables resolved as expected:
 
    ```bash
    docker compose -f docker-compose.prod.yml config
@@ -99,12 +104,9 @@ docker compose -f docker-compose.prod.yml up -d
    | 1        | Shell exports / systemd unit `Environment=`   | Highest precedence; great for one-off overrides |
    | 2        | `docker compose --env-file path.env`          | Useful for swapping between env files without editing compose |
    | 3        | `.env` beside the compose file                | Automatically picked up if present |
-   | 4        | `env_file:` entries inside the compose stack  | Where production defaults like `/opt/adsb-forwarder/forwarder.env` live |
-   | 5        | Hardcoded `environment:` values in the compose| Final fallback defaults (e.g., `INTERVAL_SEC:-3`) |
+   | 4        | Hardcoded `environment:` values in the compose| Final fallback defaults (e.g., `INTERVAL_SEC:-3`) |
 
-   When you provide a different `--env-file`, Compose replaces the values coming from `env_file:` entries. Document which file should be used in production (e.g., `/opt/adsb-forwarder/forwarder.env`) so operators know what will be overridden.
-
-4. (Optional) Manage the service with systemd so it starts on boot. This unit assumes the repo lives in `/opt/adsb-forwarder` and uses the same env file:
+4. (Optional) Manage the service with systemd so it starts on boot. This example keeps the secrets in `/etc/adsb-forwarder.env` and lets systemd load them for Compose:
 
    ```ini
    # /etc/systemd/system/adsb-forwarder-compose.service
@@ -117,6 +119,7 @@ docker compose -f docker-compose.prod.yml up -d
    Type=oneshot
    RemainAfterExit=yes
    WorkingDirectory=/opt/adsb-forwarder
+   EnvironmentFile=/etc/adsb-forwarder.env
    ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
    ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
 

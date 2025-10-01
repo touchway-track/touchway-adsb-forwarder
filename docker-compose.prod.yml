@@ -18,8 +18,6 @@ services:
       - /opt/adsb-forwarder/forward.py:/app/forward.py:ro
       - /run/dump1090-fa/aircraft.json:/run/dump1090-fa/aircraft.json:ro
     command: ["python", "/app/forward.py"]
-    env_file:
-      - /opt/adsb-forwarder/forwarder.env
     environment:
       BACKEND_URL: ${BACKEND_URL:?Set BACKEND_URL}
       HMAC_SECRET: ${HMAC_SECRET:?Set HMAC_SECRET}
