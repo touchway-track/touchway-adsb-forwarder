@@ -1,6 +1,9 @@
 import importlib
+import io
+import json
 import sys
 from pathlib import Path
+from urllib import error
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,3 +46,42 @@ def test_resolve_feeder_id_falls_back_to_file(tmp_path, monkeypatch, capsys):
     forward_mod.FEEDER = forward_mod.resolve_feeder_id()
 
     assert forward_mod.FEEDER == "d32fa672-194d-4558-b940-edb88df4ab99"
+
+
+def test_send_once_http_error_logs_context(tmp_path, monkeypatch, capsys):
+    aircraft_path = tmp_path / "aircraft.json"
+    aircraft_path.write_text(
+        json.dumps({"now": 1234, "messages": 10, "aircraft": [{"hex": "abc"}]}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("SOURCE_FILE", str(aircraft_path))
+    monkeypatch.setenv("BACKEND_URL", "http://example.com/api")
+    monkeypatch.setenv("FEEDER_ID", "feed-123")
+
+    sys.modules.pop("forward", None)
+    forward_mod = importlib.import_module("forward")
+
+    response_body = io.BytesIO(b"route not found")
+    http_error = error.HTTPError(
+        url="http://example.com/api",
+        code=404,
+        msg="Not Found",
+        hdrs=None,
+        fp=response_body,
+    )
+
+    def fake_urlopen(*_, **__):
+        raise http_error
+
+    monkeypatch.setattr(forward_mod.request, "urlopen", fake_urlopen)
+
+    result = forward_mod.send_once()
+
+    captured = capsys.readouterr()
+
+    assert result is False
+    assert "http error 404 Not Found" in captured.err
+    assert "http://example.com/api" in captured.err
+    assert "route not found" in captured.err
+    assert "BACKEND_URL" in captured.err
