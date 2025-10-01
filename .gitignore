@@ -1,5 +1,3 @@
 forwarder.env
 *.env
 !dev.env
-!docker/env/
-docker/env/*.env
