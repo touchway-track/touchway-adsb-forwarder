@@ -1,0 +1,4 @@
+forwarder.env
+*.env
+!docker/dev.env/
+docker/dev.env/*.env

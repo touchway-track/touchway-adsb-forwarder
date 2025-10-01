@@ -1,0 +1,3 @@
+# Ignore developer-specific environment overrides
+*.env
+!README.md

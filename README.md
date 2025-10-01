@@ -49,31 +49,91 @@ docker compose -f docker-compose.dev.yml up --build
 - The mock backend runs on port `8081`.
 - The forwarder reads `examples/aircraft.sample.json` and sends it every few seconds.
 - Logs will show both sides (forwarder sends, mock receives).
+- Environment variables have sensible defaults baked into `docker-compose.dev.yml`. If you need to override them, drop a file such as `docker/dev.env/forwarder.dev.env` (git-ignored) with `KEY=value` pairs and start the stack with:
+
+  ```bash
+  docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml up --build
+  ```
+
+  Any values defined in the override file (or exported in your shell) will replace the defaults.
+
+  ```bash
+  docker compose --env-file docker/dev.env/forwarder.dev.env -f docker-compose.dev.yml config
+  ```
+
+  Use the `config` view above to confirm what Compose will pass to the container when debugging environment overrides.
 
 ### 2. Production (on feeder)
 
-1. Copy the repo files to your feeder device (e.g., Raspberry Pi).
-2. Prepare an environment file (`forwarder.env`):
+1. Copy the repo files to your feeder device (e.g., Raspberry Pi). A common layout is to clone into `/opt/adsb-forwarder`:
 
-```ini
-BACKEND_URL=https://your-backend/api/adsb/ingest
-FEEDER_ID=ff-vcp-01
-SITE_ID=vcp-site
-HMAC_SECRET=supersecret
-INTERVAL_SEC=3
-USE_GZIP=1
-HTTP_TIMEOUT_SEC=5
-SOURCE_FILE=/run/dump1090-fa/aircraft.json
-```
+   ```bash
+   sudo install -d -m 755 /opt/adsb-forwarder
+   sudo chown "$USER":"$USER" /opt/adsb-forwarder
+   git clone https://github.com/touchway/touchway-adsb-forwarder.git /opt/adsb-forwarder
+   ```
 
-3. Deploy with Docker Compose:
+   Adjust the Git URL if you deploy from a fork.
+
+2. Provision an environment file on the device (recommended for both manual runs and systemd):
+
+   ```bash
+   sudo cp /opt/adsb-forwarder/examples/forwarder.env.example /opt/adsb-forwarder/forwarder.env
+   sudo nano /opt/adsb-forwarder/forwarder.env  # fill in BACKEND_URL/FEEDER_ID/SITE_ID/etc.
+   ```
+
+   > **Why not `~/.bashrc`?** Shell exports only exist for your interactive session; services started at boot (e.g., via systemd) won’t inherit them. A dedicated env file at `/opt/adsb-forwarder/forwarder.env` works for both manual and automated starts while keeping secrets out of your shell history.
+
+   The repository’s `.gitignore` already excludes `forwarder.env`/`*.env`, so you won’t accidentally commit secrets.
+
+3. Deploy with Docker Compose (the production file already references `/opt/adsb-forwarder/forwarder.env` via `env_file`):
 
 ```bash
 cd /opt/adsb-forwarder
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-4. Check logs:
+   To double-check how variables resolve before starting the stack, inspect the rendered configuration:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml config
+   ```
+
+   Compose evaluates variables in this order. Later sources override earlier ones, so exporting a value in your shell (or passing a different `--env-file`) will win over the defaults baked into the compose files:
+
+   | Priority | Source                                        | Notes |
+   |----------|-----------------------------------------------|-------|
+   | 1        | Shell exports / systemd unit `Environment=`   | Highest precedence; great for one-off overrides |
+   | 2        | `docker compose --env-file path.env`          | Useful for swapping between env files without editing compose |
+   | 3        | `.env` beside the compose file                | Automatically picked up if present |
+   | 4        | `env_file:` entries inside the compose stack  | Where production defaults like `/opt/adsb-forwarder/forwarder.env` live |
+   | 5        | Hardcoded `environment:` values in the compose| Final fallback defaults (e.g., `INTERVAL_SEC:-3`) |
+
+   When you provide a different `--env-file`, Compose replaces the values coming from `env_file:` entries. Document which file should be used in production (e.g., `/opt/adsb-forwarder/forwarder.env`) so operators know what will be overridden.
+
+4. (Optional) Manage the service with systemd so it starts on boot. This unit assumes the repo lives in `/opt/adsb-forwarder` and uses the same env file:
+
+   ```ini
+   # /etc/systemd/system/adsb-forwarder-compose.service
+   [Unit]
+   Description=ADSB forwarder via Docker Compose
+   After=docker.service network-online.target
+   Wants=docker.service network-online.target
+
+   [Service]
+   Type=oneshot
+   RemainAfterExit=yes
+   WorkingDirectory=/opt/adsb-forwarder
+   ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
+   ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+   Enable it with `sudo systemctl enable --now adsb-forwarder-compose.service`.
+
+5. Check logs:
 
 ```bash
 docker logs -f adsb-forwarder
@@ -88,7 +148,7 @@ docker logs -f adsb-forwarder
 | `BACKEND_URL`      | Target API endpoint                                | **req** |
 | `FEEDER_ID`        | Unique feeder identifier                           | **req** |
 | `SITE_ID`          | Site identifier                                    | **req** |
-| `HMAC_SECRET`      | Secret key for signing payloads (optional)         | `""`    |
+| `HMAC_SECRET`      | Secret key for signing payloads (required in prod) | **req** |
 | `INTERVAL_SEC`     | Interval between sends (seconds)                   | `3`     |
 | `HTTP_TIMEOUT_SEC` | HTTP request timeout (seconds)                     | `5`     |
 | `USE_GZIP`         | Compress payload with Gzip (1 = enabled)           | `1`     |
