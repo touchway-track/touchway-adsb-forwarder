@@ -16,7 +16,7 @@ services:
       - /tmp:rw,nosuid,nodev,noexec,mode=1777
     volumes:
       - /opt/adsb-forwarder/forward.py:/app/forward.py:ro
-      - /run/dump1090-fa/aircraft.json:/run/dump1090-fa/aircraft.json:ro
+      - /run/dump1090-fa:/run/dump1090-fa:ro
       - /var/cache/piaware/feeder_id:/var/cache/piaware/feeder_id:ro
     command: ["python", "/app/forward.py"]
     environment:
