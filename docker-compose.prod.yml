@@ -16,7 +16,12 @@ services:
       - /tmp:rw,nosuid,nodev,noexec,mode=1777
     volumes:
       - /opt/adsb-forwarder/forward.py:/app/forward.py:ro
-      - /run/dump1090-fa:/run/dump1090-fa:ro
+      - type: bind
+        source: /run/dump1090-fa
+        target: /run/dump1090-fa
+        read_only: true
+        bind:
+          propagation: rshared
       - /var/cache/piaware/feeder_id:/var/cache/piaware/feeder_id:ro
     command: ["python", "/app/forward.py"]
     environment:
@@ -29,10 +34,8 @@ services:
     healthcheck:
       test:
         [
-          "CMD",
-          "python",
-          "-c",
-          "import os,sys,time; p='/run/dump1090-fa/aircraft.json'; import os,time,sys; st=os.stat(p); sys.exit(0 if time.time()-st.st_mtime<60 else 1)",
+          "CMD-SHELL",
+          "python -c 'import os,sys,time; p=\"/run/dump1090-fa/aircraft.json\"; st=os.stat(p); sys.exit(0 if time.time()-st.st_mtime<60 else 1)' || (echo \"healthcheck failed; forcing restart\" >&2 && kill -s TERM 1)",
         ]
       interval: 30s
       timeout: 3s
