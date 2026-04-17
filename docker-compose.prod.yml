@@ -17,16 +17,15 @@ services:
     volumes:
       - /opt/adsb-forwarder/forward.py:/app/forward.py:ro
       - /run/dump1090-fa/aircraft.json:/run/dump1090-fa/aircraft.json:ro
-    command: ["python", "/app/forward.py"]
+      - /var/cache/piaware:/var/cache/piaware:ro
+    command:
+      [
+        "/bin/sh",
+        "-ec",
+        ": \"$${BACKEND_URL:?Set BACKEND_URL in /opt/adsb-forwarder/forwarder.env}\"; : \"$${HMAC_SECRET:?Set HMAC_SECRET in /opt/adsb-forwarder/forwarder.env}\"; exec python /app/forward.py",
+      ]
     env_file:
       - /opt/adsb-forwarder/forwarder.env
-    environment:
-      BACKEND_URL: ${BACKEND_URL:?Set BACKEND_URL}
-      HMAC_SECRET: ${HMAC_SECRET:?Set HMAC_SECRET}
-      INTERVAL_SEC: ${INTERVAL_SEC:-3}
-      USE_GZIP: ${USE_GZIP:-1}
-      HTTP_TIMEOUT_SEC: ${HTTP_TIMEOUT_SEC:-5}
-      SOURCE_FILE: ${SOURCE_FILE:-/run/dump1090-fa/aircraft.json}
     healthcheck:
       test:
         [
