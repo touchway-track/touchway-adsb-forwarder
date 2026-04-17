@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-import os, sys, time, json, hmac, hashlib, gzip
-from urllib import request, error
+import gzip
+import hashlib
+import hmac
+import json
+import os
+import sys
+import time
+from urllib import error, request
 
 # === Configuration from environment variables ===
 SRC = os.environ.get("SOURCE_FILE", "/run/dump1090-fa/aircraft.json")  # path to aircraft.json produced by dump1090-fa
 URL = os.environ.get("BACKEND_URL")                                   # backend endpoint to send data
 FEEDER_FILE = "/var/cache/piaware/feeder_id"                          # piaware-generated identifier file
+SIGNATURE_HEADER = "X-Feeder-Signature"
 
 
 def resolve_feeder_id():
@@ -74,7 +81,7 @@ def send_once():
     # Optional: add HMAC signature header
     sig = sign(raw)
     if sig:
-        headers["X-Feeder-Signature"] = sig
+        headers[SIGNATURE_HEADER] = sig
 
     # Build POST request
     req = request.Request(URL, data=body, headers=headers, method="POST")

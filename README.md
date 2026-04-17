@@ -68,49 +68,45 @@ docker compose -f docker-compose.dev.yml up --build
 
    Adjust the Git URL if you deploy from a fork.
 
-2. Export the required environment variables **before** starting Compose. Pick whichever method matches how you operate the host:
+2. Provision an environment file on the device (recommended for both manual runs and systemd):
 
-   - **Interactive shell or per-user startup files** – export the variables manually or add them to `~/.bashrc`/`~/.profile` so your login shell can run Compose:
+   ```bash
+   sudo cp /opt/adsb-forwarder/.env.example /opt/adsb-forwarder/forwarder.env
+   sudo nano /opt/adsb-forwarder/forwarder.env  # fill in BACKEND_URL/HMAC_SECRET and optionally FEEDER_ID
+   ```
 
-     ```bash
-     export BACKEND_URL="https://example.com/ingest"
-     export HMAC_SECRET="super-secret"
-     export FEEDER_ID="abcd-1234"
-     ```
+   > **Why not `~/.bashrc`?** Shell exports only exist for your interactive session; services started at boot (e.g., via systemd) won’t inherit them. A dedicated env file at `/opt/adsb-forwarder/forwarder.env` works for both manual and automated starts while keeping secrets out of your shell history.
 
-   - **System-wide defaults** – add the key/value pairs to `/etc/environment` (or a file sourced from it) so every session sees them.
+   The repository’s `.gitignore` already excludes `forwarder.env`/`*.env`, so you won’t accidentally commit secrets.
+   `.env.example` is production-oriented; `.docker/dev.env` remains the template used by `docker-compose.dev.yml`.
 
-   - **Service-specific environment file** – create something like `/etc/adsb-forwarder.env` with `VAR=value` lines and reference it from systemd (see below) or `source` it before running Compose.
-
-   The repository’s `.gitignore` already excludes `*.env`, so you can safely keep your secrets in a dedicated file.
-
-3. Deploy with Docker Compose:
+3. Deploy with Docker Compose (the production file already references `/opt/adsb-forwarder/forwarder.env` via `env_file`):
 
 ```bash
 cd /opt/adsb-forwarder
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-   Before starting the stack, inspect the rendered configuration to confirm the variables resolved as expected:
+   This supported production flow does not require shell exports or `--env-file`. The container reads `/opt/adsb-forwarder/forwarder.env` directly at startup.
+
+   The startup contract is:
+
+   1. `BACKEND_URL` must be set in `/opt/adsb-forwarder/forwarder.env`.
+   2. `HMAC_SECRET` must be set in `/opt/adsb-forwarder/forwarder.env`.
+   3. `FEEDER_ID` is resolved from `forwarder.env` first; if omitted, the container falls back to `/var/cache/piaware/feeder_id`.
+   4. `INTERVAL_SEC`, `USE_GZIP`, `HTTP_TIMEOUT_SEC`, and `SOURCE_FILE` fall back to the defaults built into `forward.py` if they are omitted.
+
+   To inspect the rendered stack before startup, run:
 
    ```bash
    docker compose -f docker-compose.prod.yml config
    ```
 
-   The production compose file bind-mounts both `/run/dump1090-fa/aircraft.json` **and** `/var/cache/piaware/feeder_id` from the host
-   so the container can stream aircraft data and automatically detect the Piaware feeder ID. If you customize the stack, make sure
-   those mounts remain in place or provide equivalent environment variables (`SOURCE_FILE` / `FEEDER_ID`).
+   `config` confirms the stack shape, but the runtime presence of `BACKEND_URL` and `HMAC_SECRET` is enforced inside the container so the same `forwarder.env` contract works for manual runs and systemd.
 
-   Compose evaluates variables in this order. Later sources override earlier ones, so exporting a value in your shell (or passing a different `--env-file`) will win over the defaults baked into the compose files:
+   The production compose file bind-mounts `/run/dump1090-fa` and `/var/cache/piaware` from the host so the container can stream aircraft data and auto-detect the Piaware feeder ID. If you customize the stack, keep those mounts in place or provide equivalent `SOURCE_FILE` / `FEEDER_ID` values.
 
-   | Priority | Source                                        | Notes |
-   |----------|-----------------------------------------------|-------|
-   | 1        | Shell exports / systemd unit `Environment=`   | Highest precedence; great for one-off overrides |
-   | 2        | `docker compose --env-file path.env`          | Useful for swapping between env files without editing compose |
-   | 3        | `.env` beside the compose file                | Automatically picked up if present |
-   | 4        | Hardcoded `environment:` values in the compose| Final fallback defaults (e.g., `INTERVAL_SEC:-3`) |
-
-4. (Optional) Manage the service with systemd so it starts on boot. This example keeps the secrets in `/etc/adsb-forwarder.env` and lets systemd load them for Compose:
+4. (Optional) Manage the service with systemd so it starts on boot. This unit assumes the repo lives in `/opt/adsb-forwarder` and uses the same env file:
 
    ```ini
    # /etc/systemd/system/adsb-forwarder-compose.service
@@ -123,7 +119,6 @@ docker compose -f docker-compose.prod.yml up -d
    Type=oneshot
    RemainAfterExit=yes
    WorkingDirectory=/opt/adsb-forwarder
-   EnvironmentFile=/etc/adsb-forwarder.env
    ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
    ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
 
@@ -145,15 +140,15 @@ docker logs -f adsb-forwarder
 
 | Variable           | Description                                        | Default |
 |--------------------|----------------------------------------------------|---------|
-| `BACKEND_URL`      | Target API endpoint                                | `http://localhost:8080/adsb/ingest` (dev) |
-| `FEEDER_ID`        | Unique feeder identifier (overrides Piaware auto-detect) | optional |
-| `HMAC_SECRET`      | Secret key for signing payloads (required in prod) | **req** |
+| `BACKEND_URL`      | Target API endpoint                                | none; required |
+| `FEEDER_ID`        | Unique feeder identifier (overrides Piaware auto-detect) | auto-detect from Piaware if omitted |
+| `HMAC_SECRET`      | Secret key for signing payloads                    | none; required in supported prod deploy |
 | `INTERVAL_SEC`     | Interval between sends (seconds)                   | `3`     |
 | `HTTP_TIMEOUT_SEC` | HTTP request timeout (seconds)                     | `5`     |
 | `USE_GZIP`         | Compress payload with Gzip (1 = enabled)           | `1`     |
 | `SOURCE_FILE`      | Path to `aircraft.json`                            | `/run/dump1090-fa/aircraft.json` |
 
-> If `FEEDER_ID` is omitted, the forwarder automatically reads `/var/cache/piaware/feeder_id` generated by Piaware during feeder registration.
+> If `FEEDER_ID` is omitted, the production container reads `/var/cache/piaware/feeder_id` from the mounted Piaware cache directory.
 
 ---
 
@@ -182,7 +177,7 @@ receiving API.
 
 1. The forwarder serializes the request body as JSON.
 2. It computes `HMAC_SHA256(secret=HMAC_SECRET, message=payload_bytes)`.
-3. The resulting digest is hex-encoded and attached to the HTTP request as the `X-ADSB-Signature` header.
+3. The resulting digest is hex-encoded and attached to the HTTP request as the `X-Feeder-Signature` header.
 
 Because HMAC uses the shared secret on both ends, any change to the payload or missing/incorrect secret causes the server to
 calculate a different digest and reject the request.
@@ -193,11 +188,11 @@ Your API should perform the same computation before accepting a payload:
 
 1. Read the raw request body exactly as received.
 2. Recreate the HMAC using the shared secret (`HMAC_SECRET`).
-3. Compare the digest to the value from the `X-ADSB-Signature` header using a **constant-time** comparison routine to avoid
+3. Compare the digest to the value from the `X-Feeder-Signature` header using a **constant-time** comparison routine to avoid
    timing attacks.
 4. Reject the request (e.g., HTTP 401/403) if the header is missing or the signature does not match.
 
-If you are building a new endpoint, require both the `X-ADSB-Signature` header and the `FEEDER_ID` metadata so the backend can
+If you are building a new endpoint, require both the `X-Feeder-Signature` header and the `FEEDER_ID` metadata so the backend can
 associate the signing secret with the correct feeder record.
 
 ---
