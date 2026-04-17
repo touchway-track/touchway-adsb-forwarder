@@ -1,209 +1,219 @@
 # ADS-B Forwarder
 
-A lightweight Python service for collecting local ADS-B data from a FlightAware feeder (piaware / dump1090) and forwarding it securely to a central backend API. For more details on the feeder software, check the [official Piaware documentation](https://github.com/flightaware/piaware).
+A lightweight Python service that reads local ADS-B data from `dump1090-fa` and forwards it to a backend API.
 
-This project is designed to run both locally (for development/testing) and on production feeders (e.g., Raspberry Pi with FlightFeeder or Piaware).
+The project supports two operating modes:
 
----
+- Development: run local source code with `docker-compose.dev.yml`.
+- Production: deploy a published Docker image from GHCR with `docker-compose.prod.yml`.
 
 ## Features
 
-- Reads aircraft JSON data from `dump1090-fa` (`/run/dump1090-fa/aircraft.json`).
-- Forwards data as JSON (optionally compressed with Gzip).
-- Optional HMAC-SHA256 signing for authenticity.
-- Configurable interval and timeout.
-- Minimal dependencies (stdlib only).
-- Runs as a Docker container (slim Python image).
-
----
+- Reads aircraft data from `dump1090-fa` at `/run/dump1090-fa/aircraft.json`.
+- Sends compact JSON payloads to a backend endpoint.
+- Supports optional gzip compression.
+- Supports optional HMAC-SHA256 request signing.
+- Uses only the Python standard library at runtime.
+- Ships as a multi-arch Docker image for `linux/arm/v7`, `linux/arm64`, and `linux/amd64`.
 
 ## Repository Structure
 
-```
+```text
 adsb-forwarder/
-├─ forward.py                  # Main forwarder script
-├─ examples/
-│  ├─ aircraft.sample.json     # Sample aircraft JSON for testing
 ├─ .docker/
-│  └─ dev.env                  # Default env vars consumed by docker-compose.dev.yml
-├─ .env.example                # Template you can copy for other deployments
-├─ docker-compose.dev.yml      # Local dev stack (forwarder only)
-├─ docker-compose.prod.yml     # Production stack (forwarder only)
-├─ Dockerfile                  # Docker build definition
-├─ .dockerignore
-└─ README.md
+│  └─ dev.env
+├─ .github/
+│  └─ workflows/
+│     └─ build.yml
+├─ compose.env.example
+├─ docker-compose.dev.yml
+├─ docker-compose.prod.yml
+├─ Dockerfile
+├─ examples/
+│  └─ aircraft.sample.json
+├─ forward.py
+├─ tests/
+│  └─ test_forward.py
+└─ .env.example
 ```
 
----
+## Development
 
-## Quick Start
-
-### 1. Development (local, without feeder)
-
-Run the forwarder against your locally running backend using the sample JSON from this repository.
+Run the forwarder locally against the sample aircraft feed:
 
 ```bash
-# optional: copy .docker/dev.env and tweak if your backend isn't on localhost
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-- The forwarder reads `examples/aircraft.sample.json` and sends it every few seconds.
-- `docker-compose.dev.yml` loads `.docker/dev.env`; copy or edit that file to point at your local backend (e.g., `BACKEND_URL=http://localhost:8080/adsb/ingest`).
-- Prefer `docker run` over Compose? Mount `.docker/dev.env` (or a copy) to reuse the same localhost defaults for quick experiments.
-- To preview the final configuration with your overrides applied, run:
+Development uses:
 
-  ```bash
-  docker compose -f docker-compose.dev.yml config
-  ```
+- source bind-mount of `forward.py`
+- sample feed at `examples/aircraft.sample.json`
+- defaults from `.docker/dev.env`
 
-### 2. Production (on feeder)
+To inspect the rendered stack:
 
-1. Copy the repo files to your feeder device (e.g., Raspberry Pi). A common layout is to clone into `/opt/adsb-forwarder`:
+```bash
+docker compose -f docker-compose.dev.yml config
+```
 
-   ```bash
-   sudo install -d -m 755 /opt/adsb-forwarder
-   sudo chown "$USER":"$USER" /opt/adsb-forwarder
-   git clone https://github.com/touchway/touchway-adsb-forwarder.git /opt/adsb-forwarder
-   ```
+## Production
 
-   Adjust the Git URL if you deploy from a fork.
+Production deploys a published image, not a host-mounted `forward.py`.
 
-2. Provision an environment file on the device (recommended for both manual runs and systemd):
+### 1. Initial setup on the feeder
 
-   ```bash
-   sudo cp /opt/adsb-forwarder/.env.example /opt/adsb-forwarder/forwarder.env
-   sudo nano /opt/adsb-forwarder/forwarder.env  # fill in BACKEND_URL/HMAC_SECRET and optionally FEEDER_ID
-   ```
+Clone the repo once so the host has the Compose file and templates:
 
-   > **Why not `~/.bashrc`?** Shell exports only exist for your interactive session; services started at boot (e.g., via systemd) won’t inherit them. A dedicated env file at `/opt/adsb-forwarder/forwarder.env` works for both manual and automated starts while keeping secrets out of your shell history.
+```bash
+sudo install -d -m 755 /opt/adsb-forwarder
+sudo chown "$USER":"$USER" /opt/adsb-forwarder
+git clone https://github.com/touchway-track/touchway-adsb-forwarder.git /opt/adsb-forwarder
+```
 
-   The repository’s `.gitignore` already excludes `forwarder.env`/`*.env`, so you won’t accidentally commit secrets.
-   `.env.example` is production-oriented; `.docker/dev.env` remains the template used by `docker-compose.dev.yml`.
+Create the runtime env file used by the application:
 
-3. Deploy with Docker Compose (the production file already references `/opt/adsb-forwarder/forwarder.env` via `env_file`):
+```bash
+cp /opt/adsb-forwarder/.env.example /opt/adsb-forwarder/forwarder.env
+nano /opt/adsb-forwarder/forwarder.env
+```
+
+`/opt/adsb-forwarder/forwarder.env` is only for application runtime values such as `BACKEND_URL`, `HMAC_SECRET`, and optional `FEEDER_ID`.
+
+Create the Compose variable file used to select the image tag:
+
+```bash
+cp /opt/adsb-forwarder/compose.env.example /opt/adsb-forwarder/.env
+nano /opt/adsb-forwarder/.env
+```
+
+`/opt/adsb-forwarder/.env` is only for Compose interpolation and must define `IMAGE_TAG=...`.
+
+### 2. Deploy
 
 ```bash
 cd /opt/adsb-forwarder
+docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-   This supported production flow does not require shell exports or `--env-file`. The container reads `/opt/adsb-forwarder/forwarder.env` directly at startup.
+The production stack mounts only runtime files and directories from the host:
 
-   The startup contract is:
+- `/opt/adsb-forwarder/forwarder.env`
+- `/run/dump1090-fa`
+- `/var/cache/piaware`
 
-   1. `BACKEND_URL` must be set in `/opt/adsb-forwarder/forwarder.env`.
-   2. `HMAC_SECRET` must be set in `/opt/adsb-forwarder/forwarder.env`.
-   3. `FEEDER_ID` is resolved from `forwarder.env` first; if omitted, the container falls back to `/var/cache/piaware/feeder_id`.
-   4. `INTERVAL_SEC`, `USE_GZIP`, `HTTP_TIMEOUT_SEC`, and `SOURCE_FILE` fall back to the defaults built into `forward.py` if they are omitted.
+The container image already contains `forward.py`.
 
-   To inspect the rendered stack before startup, run:
+### 3. Upgrade
 
-   ```bash
-   docker compose -f docker-compose.prod.yml config
-   ```
+Edit `/opt/adsb-forwarder/.env` and change `IMAGE_TAG` to the new published tag, then run:
 
-   `config` confirms the stack shape, but the runtime presence of `BACKEND_URL` and `HMAC_SECRET` is enforced inside the container so the same `forwarder.env` contract works for manual runs and systemd.
+```bash
+cd /opt/adsb-forwarder
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
 
-   The production compose file bind-mounts `/run/dump1090-fa` and `/var/cache/piaware` from the host so the container can stream aircraft data and auto-detect the Piaware feeder ID. If you customize the stack, keep those mounts in place or provide equivalent `SOURCE_FILE` / `FEEDER_ID` values.
+### 4. Rollback
 
-4. (Optional) Manage the service with systemd so it starts on boot. This unit assumes the repo lives in `/opt/adsb-forwarder` and uses the same env file:
+Set `IMAGE_TAG` back to the previous tag in `/opt/adsb-forwarder/.env`, then run the same commands:
 
-   ```ini
-   # /etc/systemd/system/adsb-forwarder-compose.service
-   [Unit]
-   Description=ADSB forwarder via Docker Compose
-   After=docker.service network-online.target
-   Wants=docker.service network-online.target
+```bash
+cd /opt/adsb-forwarder
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
 
-   [Service]
-   Type=oneshot
-   RemainAfterExit=yes
-   WorkingDirectory=/opt/adsb-forwarder
-   ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
-   ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
+### 5. Inspect the rendered production stack
 
-   [Install]
-   WantedBy=multi-user.target
-   ```
+```bash
+docker compose -f docker-compose.prod.yml config
+```
 
-   Enable it with `sudo systemctl enable --now adsb-forwarder-compose.service`.
+### Optional: start on boot with systemd
 
-5. Check logs:
+```ini
+# /etc/systemd/system/adsb-forwarder-compose.service
+[Unit]
+Description=ADSB forwarder via Docker Compose
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/adsb-forwarder
+ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
+ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it with:
+
+```bash
+sudo systemctl enable --now adsb-forwarder-compose.service
+```
+
+The systemd unit is only for boot-time startup. Normal upgrades and rollbacks should still be done by changing `IMAGE_TAG` and running `pull` plus `up -d`.
+
+## GitHub Actions and Image Tags
+
+GitHub Actions validates every PR with:
+
+- `pytest -q`
+- `docker build -t adsb-forwarder:pr .`
+- a short smoke test against the built image
+
+Publication rules:
+
+- Push to `main`: publish `ghcr.io/touchway-track/touchway-adsb-forwarder:sha-<commit>`
+- Push tag `vX.Y.Z`: publish both `vX.Y.Z` and `sha-<commit>`
+- No `latest` tag is published
+
+Production should normally consume immutable tags such as `v1.2.3` or `sha-<commit>`.
+
+## Environment Variables
+
+Runtime variables belong in `/opt/adsb-forwarder/forwarder.env`.
+
+| Variable           | Description                                                   | Default |
+|--------------------|---------------------------------------------------------------|---------|
+| `BACKEND_URL`      | Target API endpoint                                           | none; required |
+| `FEEDER_ID`        | Unique feeder identifier; overrides Piaware auto-detect       | auto-detect from Piaware if omitted |
+| `HMAC_SECRET`      | Secret used to sign payloads                                  | none; required in supported production deploy |
+| `INTERVAL_SEC`     | Interval between sends, in seconds                            | `3` |
+| `HTTP_TIMEOUT_SEC` | HTTP timeout, in seconds                                      | `5` |
+| `USE_GZIP`         | Compress payload with gzip when set to `1`                    | `1` |
+| `SOURCE_FILE`      | Path to `aircraft.json` inside the container                  | `/run/dump1090-fa/aircraft.json` |
+
+If `FEEDER_ID` is omitted, the forwarder falls back to `/var/cache/piaware/feeder_id`.
+
+`IMAGE_TAG` does not belong in `forwarder.env`; it belongs in `/opt/adsb-forwarder/.env`.
+
+## Security
+
+- Runs as non-root inside Docker.
+- Drops all Linux capabilities.
+- Uses a read-only root filesystem.
+- Uses `tmpfs` for `/tmp`.
+- Supports HMAC signing so the backend can verify authenticity.
+
+### HMAC request signing
+
+If `HMAC_SECRET` is set, the forwarder computes `HMAC_SHA256(secret, request_body)` and sends the hex digest in the `X-Feeder-Signature` header.
+
+Backend expectations:
+
+1. Read the raw request body exactly as received.
+2. Compute the same HMAC with the feeder secret.
+3. Compare the digest using a constant-time comparison.
+4. Reject missing or invalid signatures.
+
+## Logs
 
 ```bash
 docker logs -f adsb-forwarder
 ```
-
----
-
-## Environment Variables
-
-| Variable           | Description                                        | Default |
-|--------------------|----------------------------------------------------|---------|
-| `BACKEND_URL`      | Target API endpoint                                | none; required |
-| `FEEDER_ID`        | Unique feeder identifier (overrides Piaware auto-detect) | auto-detect from Piaware if omitted |
-| `HMAC_SECRET`      | Secret key for signing payloads                    | none; required in supported prod deploy |
-| `INTERVAL_SEC`     | Interval between sends (seconds)                   | `3`     |
-| `HTTP_TIMEOUT_SEC` | HTTP request timeout (seconds)                     | `5`     |
-| `USE_GZIP`         | Compress payload with Gzip (1 = enabled)           | `1`     |
-| `SOURCE_FILE`      | Path to `aircraft.json`                            | `/run/dump1090-fa/aircraft.json` |
-
-> If `FEEDER_ID` is omitted, the production container reads `/var/cache/piaware/feeder_id` from the mounted Piaware cache directory.
-
----
-
-## Security
-
-- Runs as a non-root user inside Docker.
-- Drops all Linux capabilities.
-- Uses read-only root filesystem + tmpfs for `/tmp`.
-- Optional request signing with HMAC.
-- Can be deployed on a private tailnet (e.g., via Tailscale).
-
-### HMAC request signing
-
-The forwarder can sign each payload with an **HMAC-SHA256** digest so the backend can prove the data really came from your feeder
-and was not tampered with in transit. This strategy uses a shared secret (`HMAC_SECRET`) that exists only on the feeder and the
-receiving API.
-
-#### When to use it
-
-- **Production** deployments should always enable HMAC by setting the `HMAC_SECRET` environment variable. The secret can be any
-  sufficiently random string (for example, 32+ bytes generated with `openssl rand -hex 32`).
-- **Development** environments may omit the variable to simplify local testing. When `HMAC_SECRET` is unset the forwarder skips
-  signing entirely.
-
-#### How it works
-
-1. The forwarder serializes the request body as JSON.
-2. It computes `HMAC_SHA256(secret=HMAC_SECRET, message=payload_bytes)`.
-3. The resulting digest is hex-encoded and attached to the HTTP request as the `X-Feeder-Signature` header.
-
-Because HMAC uses the shared secret on both ends, any change to the payload or missing/incorrect secret causes the server to
-calculate a different digest and reject the request.
-
-#### Backend expectations
-
-Your API should perform the same computation before accepting a payload:
-
-1. Read the raw request body exactly as received.
-2. Recreate the HMAC using the shared secret (`HMAC_SECRET`).
-3. Compare the digest to the value from the `X-Feeder-Signature` header using a **constant-time** comparison routine to avoid
-   timing attacks.
-4. Reject the request (e.g., HTTP 401/403) if the header is missing or the signature does not match.
-
-If you are building a new endpoint, require both the `X-Feeder-Signature` header and the `FEEDER_ID` metadata so the backend can
-associate the signing secret with the correct feeder record.
-
----
-
-## Development Notes
-
-- The project is intentionally minimal (no external Python libs) for compatibility with constrained devices.
-- For production, you may want to version-pin the Python slim image and monitor CVEs.
-
----
-
-## License
-
-MIT — use freely in your own projects.

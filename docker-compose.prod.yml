@@ -1,10 +1,9 @@
 services:
   forwarder:
-    image: python:3.12.6-slim-bookworm
+    image: ghcr.io/touchway-track/touchway-adsb-forwarder:${IMAGE_TAG}
     container_name: adsb-forwarder
     restart: unless-stopped
     user: "10001:10001"
-    working_dir: /app
     network_mode: host
     read_only: true
     security_opt:
@@ -13,7 +12,6 @@ services:
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,mode=1777
     volumes:
-      - /opt/adsb-forwarder/forward.py:/app/forward.py:ro
       - type: bind
         source: /run/dump1090-fa
         target: /run/dump1090-fa

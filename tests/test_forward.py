@@ -113,6 +113,7 @@ def test_resolve_feeder_id_falls_back_to_file(tmp_path, monkeypatch, capsys):
 
     assert forward_mod.FEEDER == "d32fa672-194d-4558-b940-edb88df4ab99"
 
+
 def test_send_once_http_error_logs_context(tmp_path, monkeypatch, capsys):
     aircraft_path = tmp_path / "aircraft.json"
     aircraft_path.write_text(
@@ -157,3 +158,19 @@ def test_env_example_matches_production_source_file():
 
     assert "SOURCE_FILE=/run/dump1090-fa/aircraft.json" in env_example
     assert "SOURCE_FILE=/data/aircraft.json" not in env_example
+
+
+def test_compose_env_example_contains_image_tag():
+    compose_env_example = (ROOT / "compose.env.example").read_text(encoding="utf-8")
+
+    assert "IMAGE_TAG=" in compose_env_example
+    assert "sha-REPLACE_WITH_PUBLISHED_TAG" in compose_env_example
+
+
+def test_prod_compose_uses_published_image_and_runtime_mounts():
+    prod_compose = (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
+
+    assert "ghcr.io/touchway-track/touchway-adsb-forwarder:${IMAGE_TAG" in prod_compose
+    assert "/opt/adsb-forwarder/forward.py:/app/forward.py:ro" not in prod_compose
+    assert "source: /run/dump1090-fa" in prod_compose
+    assert "/run/dump1090-fa/aircraft.json:/run/dump1090-fa/aircraft.json:ro" not in prod_compose
