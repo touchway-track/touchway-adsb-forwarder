@@ -159,7 +159,7 @@ sudo systemctl enable --now adsb-forwarder-compose.service
 
 The systemd unit is only for boot-time startup. Normal upgrades and rollbacks should still be done by changing `IMAGE_TAG` and running `pull` plus `up -d`.
 
-## GitHub Actions and Image Tags
+## GitHub Actions, Releases, and Image Tags
 
 GitHub Actions validates every PR with:
 
@@ -167,13 +167,25 @@ GitHub Actions validates every PR with:
 - `docker build -t adsb-forwarder:pr .`
 - a short smoke test against the built image
 
-Publication rules:
+On every push to `main`, the workflow always publishes:
 
-- Push to `main`: publish `ghcr.io/touchway-track/touchway-adsb-forwarder:sha-<commit>`
-- Push tag `vX.Y.Z`: publish both `vX.Y.Z` and `sha-<commit>`
-- No `latest` tag is published
+- `ghcr.io/touchway-track/touchway-adsb-forwarder:sha-<commit>`
 
-Production should normally consume immutable tags such as `v1.2.3` or `sha-<commit>`.
+The workflow also creates a GitHub Release and a matching semver image tag when the commits since the last release contain releasable Conventional Commits:
+
+- `feat` => minor bump
+- `fix`, `perf`, `refactor`, `build`, `chore` => patch bump
+- `!` or `BREAKING CHANGE:` => major bump
+- `docs`, `test`, `style`, `ci` => no semver release by themselves
+
+When a semver release is created, the same workflow publishes both:
+
+- `ghcr.io/touchway-track/touchway-adsb-forwarder:vX.Y.Z`
+- `ghcr.io/touchway-track/touchway-adsb-forwarder:sha-<commit>`
+
+No `latest` tag is published.
+
+Production should normally consume immutable tags such as `v1.2.3`. The `sha-<commit>` tags remain available for audit, testing, and rollback to an exact commit.
 
 ## Environment Variables
 
