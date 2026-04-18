@@ -36,3 +36,39 @@ def test_render_control_matches_package_contract():
     assert "Version: 1.2.3" in control
     assert "Architecture: all" in control
     assert "Depends: python3, systemd" in control
+
+
+def test_package_basename_matches_release_asset_contract():
+    assert build_deb.package_basename("1.2.3") == "adsb-forwarder_1.2.3_all"
+
+
+def test_build_package_stages_expected_files(tmp_path, monkeypatch):
+    staged_paths: set[str] = set()
+
+    def fake_run(args, check):
+        assert check is True
+        assert args[0] == "dpkg-deb"
+        staging_root = Path(args[3])
+        deb_path = Path(args[4])
+
+        for path in staging_root.rglob("*"):
+            if path.is_file():
+                staged_paths.add(str(path.relative_to(staging_root)))
+
+        deb_path.write_bytes(b"deb")
+        return None
+
+    monkeypatch.setattr(build_deb.subprocess, "run", fake_run)
+
+    deb_path, checksum_path = build_deb.build_package("1.2.3", tmp_path)
+
+    assert deb_path.name == "adsb-forwarder_1.2.3_all.deb"
+    assert checksum_path.name == "adsb-forwarder_1.2.3_all.deb.sha256"
+    assert "DEBIAN/control" in staged_paths
+    assert "DEBIAN/conffiles" in staged_paths
+    assert "DEBIAN/postinst" in staged_paths
+    assert "DEBIAN/prerm" in staged_paths
+    assert "DEBIAN/postrm" in staged_paths
+    assert "etc/adsb-forwarder/forwarder.env" in staged_paths
+    assert "lib/systemd/system/adsb-forwarder.service" in staged_paths
+    assert "usr/lib/adsb-forwarder/forward.py" in staged_paths

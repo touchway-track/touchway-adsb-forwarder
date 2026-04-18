@@ -44,7 +44,7 @@ def test_resolve_release_bumps_from_zero_when_no_prior_tags(monkeypatch):
     monkeypatch.setattr(
         next_semver,
         "commits_since",
-        lambda tag: [("feat: initial production image release", "")],
+        lambda tag: [("feat: initial native package release", "")],
     )
 
     release = next_semver.resolve_release()

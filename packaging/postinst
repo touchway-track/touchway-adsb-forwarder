@@ -1,29 +1,58 @@
 #!/bin/sh
 set -eu
 
+ensure_system_account() {
+    if ! getent group adsb-forwarder >/dev/null 2>&1; then
+        addgroup --system adsb-forwarder >/dev/null
+    fi
+
+    if ! id adsb-forwarder >/dev/null 2>&1; then
+        adduser \
+            --system \
+            --ingroup adsb-forwarder \
+            --no-create-home \
+            --home /usr/lib/adsb-forwarder \
+            --shell /usr/sbin/nologin \
+            adsb-forwarder >/dev/null
+    fi
+}
+
+require_systemctl() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "systemctl is required to manage adsb-forwarder.service" >&2
+        exit 1
+    fi
+}
+
+reload_systemd() {
+    require_systemctl
+    systemctl daemon-reload >/dev/null 2>&1
+}
+
+restart_service_or_fail() {
+    require_systemctl
+    if ! systemctl restart adsb-forwarder.service >/dev/null 2>&1; then
+        echo "failed to restart adsb-forwarder.service during package upgrade" >&2
+        echo "inspect: systemctl status adsb-forwarder && journalctl -u adsb-forwarder" >&2
+        exit 1
+    fi
+}
+
 case "${1:-configure}" in
     configure)
-        if ! getent group adsb-forwarder >/dev/null 2>&1; then
-            addgroup --system adsb-forwarder >/dev/null
-        fi
+        ensure_system_account
+        reload_systemd
 
-        if ! id adsb-forwarder >/dev/null 2>&1; then
-            adduser \
-                --system \
-                --ingroup adsb-forwarder \
-                --no-create-home \
-                --home /usr/lib/adsb-forwarder \
-                --shell /usr/sbin/nologin \
-                adsb-forwarder >/dev/null
-        fi
-
-        if command -v systemctl >/dev/null 2>&1; then
-            systemctl daemon-reload >/dev/null 2>&1 || true
+        if [ -n "${2:-}" ]; then
+            restart_service_or_fail
+            exit 0
         fi
 
         cat <<'EOF'
 adsb-forwarder installed.
-Edit /etc/adsb-forwarder/forwarder.env, then enable and start the service manually:
+The service is still stopped and disabled.
+Edit /etc/adsb-forwarder/forwarder.env before enabling it:
+  sudoedit /etc/adsb-forwarder/forwarder.env
   sudo systemctl enable --now adsb-forwarder
   sudo systemctl status adsb-forwarder
   sudo journalctl -u adsb-forwarder -f

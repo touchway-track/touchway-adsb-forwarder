@@ -74,6 +74,7 @@ pytest -v
 
 - Use `docker-compose.dev.yml` to simulate data flow during local development.
 - CI must also smoke test the installed `.deb` by running `/usr/lib/adsb-forwarder/forward.py --once`.
+- CI must validate package upgrade and `--reinstall` flows, including the automatic restart contract for `adsb-forwarder.service`.
 
 ---
 
@@ -119,18 +120,22 @@ flake8 forward.py
 ## Deployment Steps
 
 1. SSH into feeder via Tailscale.
-2. Download the release asset `adsb-forwarder_<version>_all.deb`.
-3. Install it with `apt`.
-4. Edit `/etc/adsb-forwarder/forwarder.env`.
-5. Enable and start the service:
+2. Download `adsb-forwarder_<version>_all.deb` and `adsb-forwarder_<version>_all.deb.sha256`.
+3. Verify the checksum.
+4. Install the package with `apt`.
+5. Edit `/etc/adsb-forwarder/forwarder.env`.
+6. Enable and start the service:
 
 ```bash
+sha256sum -c adsb-forwarder_<version>_all.deb.sha256
 sudo apt install ./adsb-forwarder_<version>_all.deb
 sudoedit /etc/adsb-forwarder/forwarder.env
 sudo systemctl enable --now adsb-forwarder
 ```
 
-6. Logs:
+The first install keeps the service stopped and disabled. Package upgrade, reinstall, and rollback restart the service automatically and fail the `apt` transaction if the restart fails.
+
+7. Logs:
 
 ```bash
 sudo systemctl status adsb-forwarder
@@ -141,7 +146,7 @@ sudo journalctl -u adsb-forwarder -f
 
 ## Notes for Agents
 
-- If modifying CI workflows: preserve the `.deb` build, `dpkg-deb` inspection, install smoke test, and `systemd-analyze verify`.
+- If modifying CI workflows: preserve the `.deb` build, `dpkg-deb` inspection, install smoke test, upgrade/reinstall restart smoke, and `systemd-analyze verify`.
 - Keep `forward.py` dependency-free unless absolutely necessary.
 - When changing `forwarder.env` keys: update `README.md`, `.env.example`, and the package builder if paths change.
 

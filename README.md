@@ -72,6 +72,7 @@ sudo systemctl enable --now adsb-forwarder
 ```
 
 The package installs the service stopped and disabled. It does not enable or start the unit automatically.
+You must edit `/etc/adsb-forwarder/forwarder.env` before the first `enable --now`.
 
 ### Configuration
 
@@ -96,7 +97,14 @@ Install the new package version over the existing one:
 
 ```bash
 sudo apt install ./adsb-forwarder_<new-version>_all.deb
-sudo systemctl restart adsb-forwarder
+```
+
+The package reloads `systemd` and restarts `adsb-forwarder.service` automatically during upgrade.
+If that restart fails, `apt` fails and you should inspect:
+
+```bash
+sudo systemctl status adsb-forwarder
+sudo journalctl -u adsb-forwarder -n 100
 ```
 
 ### Rollback
@@ -105,8 +113,9 @@ Reinstall the previous package version:
 
 ```bash
 sudo apt install ./adsb-forwarder_<previous-version>_all.deb
-sudo systemctl restart adsb-forwarder
 ```
+
+Rollback follows the same package lifecycle as upgrade: the unit is restarted automatically and package configuration fails if the restart fails.
 
 ### Manual Raspberry Pi validation
 
@@ -167,6 +176,7 @@ Every PR and push validates:
 - `dpkg-deb -I` and `dpkg-deb -c`
 - package installation on the runner
 - one-shot execution of the installed forwarder against a sample feed and a dead local port
+- package upgrade and `--reinstall` lifecycle smoke with restart verification
 - `systemd-analyze verify /lib/systemd/system/adsb-forwarder.service`
 
 On `main`, the workflow keeps the existing semver rules:
