@@ -176,7 +176,6 @@ Every PR and push validates:
 - `dpkg-deb -I` and `dpkg-deb -c`
 - package installation on the runner
 - one-shot execution of the installed forwarder against a sample feed and a dead local port
-- package upgrade and `--reinstall` lifecycle smoke with restart verification
 - `systemd-analyze verify /lib/systemd/system/touchway-adsb-forwarder.service`
 
 On `main`, the workflow keeps the existing semver rules:

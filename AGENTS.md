@@ -74,7 +74,7 @@ pytest -v
 
 - Use `docker-compose.dev.yml` to simulate data flow during local development.
 - CI must also smoke test the installed `.deb` by running `/usr/lib/touchway-adsb-forwarder/forward.py --once`.
-- CI must validate package upgrade and `--reinstall` flows, including the automatic restart contract for `touchway-adsb-forwarder.service`.
+- Package lifecycle behavior is covered by the packaging script tests in `pytest`.
 
 ---
 
@@ -146,7 +146,7 @@ sudo journalctl -u touchway-adsb-forwarder -f
 
 ## Notes for Agents
 
-- If modifying CI workflows: preserve the `.deb` build, `dpkg-deb` inspection, install smoke test, upgrade/reinstall restart smoke, and `systemd-analyze verify`.
+- If modifying CI workflows: preserve the `.deb` build, `dpkg-deb` inspection, install smoke test, and `systemd-analyze verify`.
 - Keep `forward.py` dependency-free unless absolutely necessary.
 - When changing `forwarder.env` keys: update `README.md`, `.env.example`, and the package builder if paths change.
 
