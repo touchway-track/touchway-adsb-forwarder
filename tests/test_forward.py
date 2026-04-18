@@ -93,6 +93,7 @@ def test_send_once_uses_feeder_signature_header(tmp_path, monkeypatch):
     }
 
     assert headers[forward_mod.SIGNATURE_HEADER.lower()] == expected_signature
+    assert headers["user-agent"] == "touchway-adsb-forwarder/1.0"
     assert "x-adsb-signature" not in headers
 
 
@@ -163,17 +164,17 @@ def test_env_example_matches_production_source_file():
 def test_env_example_recommends_explicit_feeder_id_for_native_install():
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
-    assert "/etc/adsb-forwarder/forwarder.env" in env_example
+    assert "/etc/touchway-adsb-forwarder/forwarder.env" in env_example
     assert "Set `FEEDER_ID` explicitly for native installs" in env_example
 
 
 def test_systemd_unit_matches_native_deploy_contract():
-    service_unit = (ROOT / "packaging" / "adsb-forwarder.service").read_text(encoding="utf-8")
+    service_unit = (ROOT / "packaging" / "touchway-adsb-forwarder.service").read_text(encoding="utf-8")
 
-    assert "User=adsb-forwarder" in service_unit
-    assert "Group=adsb-forwarder" in service_unit
-    assert "EnvironmentFile=/etc/adsb-forwarder/forwarder.env" in service_unit
-    assert "ExecStart=/usr/bin/python3 /usr/lib/adsb-forwarder/forward.py" in service_unit
+    assert "User=touchway-adsb-forwarder" in service_unit
+    assert "Group=touchway-adsb-forwarder" in service_unit
+    assert "EnvironmentFile=/etc/touchway-adsb-forwarder/forwarder.env" in service_unit
+    assert "ExecStart=/usr/bin/python3 /usr/lib/touchway-adsb-forwarder/forward.py" in service_unit
     assert "ExecStartPre=/bin/sh -c '[ -n \"$BACKEND_URL\" ] && [ -n \"$HMAC_SECRET\" ]'" in service_unit
     assert "ProtectSystem=strict" in service_unit
     assert "ReadOnlyPaths=/run/dump1090-fa" in service_unit

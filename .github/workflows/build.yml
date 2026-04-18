@@ -56,7 +56,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deb_path="$(echo dist/adsb-forwarder_*_all.deb)"
+          deb_path="$(echo dist/touchway-adsb-forwarder_*_all.deb)"
           dpkg-deb -I "${deb_path}"
           dpkg-deb -c "${deb_path}"
 
@@ -64,10 +64,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deb_path="$(echo dist/adsb-forwarder_*_all.deb)"
-          sample_json="$(mktemp /tmp/adsb-forwarder-aircraft.XXXXXX.json)"
-          stub_dir="$(mktemp -d /tmp/adsb-forwarder-systemctl.XXXXXX)"
-          systemctl_log="$(mktemp /tmp/adsb-forwarder-systemctl-log.XXXXXX)"
+          deb_path="$(echo dist/touchway-adsb-forwarder_*_all.deb)"
+          sample_json="$(mktemp /tmp/touchway-adsb-forwarder-aircraft.XXXXXX.json)"
+          stub_dir="$(mktemp -d /tmp/touchway-adsb-forwarder-systemctl.XXXXXX)"
+          systemctl_log="$(mktemp /tmp/touchway-adsb-forwarder-systemctl-log.XXXXXX)"
           cp examples/aircraft.sample.json "${sample_json}"
           chmod 644 "${sample_json}"
 
@@ -80,12 +80,12 @@ jobs:
 
           sudo env "PATH=${stub_dir}:$PATH" "SYSTEMCTL_LOG=${systemctl_log}" apt-get install -y "./${deb_path}"
           grep -Fq "daemon-reload" "${systemctl_log}"
-          if grep -Fq "restart adsb-forwarder.service" "${systemctl_log}"; then
-            echo "initial install must not restart adsb-forwarder.service" >&2
+          if grep -Fq "restart touchway-adsb-forwarder.service" "${systemctl_log}"; then
+            echo "initial install must not restart touchway-adsb-forwarder.service" >&2
             exit 1
           fi
 
-          sudo tee /etc/adsb-forwarder/forwarder.env >/dev/null <<EOF
+          sudo tee /etc/touchway-adsb-forwarder/forwarder.env >/dev/null <<EOF
           BACKEND_URL=http://127.0.0.1:9
           FEEDER_ID=smoke
           HMAC_SECRET=test
@@ -94,14 +94,14 @@ jobs:
           HTTP_TIMEOUT_SEC=5
           SOURCE_FILE=${sample_json}
           EOF
-          sudo chmod 640 /etc/adsb-forwarder/forwarder.env
+          sudo chmod 640 /etc/touchway-adsb-forwarder/forwarder.env
 
           output="$(
             sudo bash -lc '
               set -a
-              . /etc/adsb-forwarder/forwarder.env
+              . /etc/touchway-adsb-forwarder/forwarder.env
               set +a
-              exec sudo -u adsb-forwarder --preserve-env=BACKEND_URL,FEEDER_ID,HMAC_SECRET,INTERVAL_SEC,USE_GZIP,HTTP_TIMEOUT_SEC,SOURCE_FILE /usr/bin/python3 /usr/lib/adsb-forwarder/forward.py --once
+              exec sudo -u touchway-adsb-forwarder --preserve-env=BACKEND_URL,FEEDER_ID,HMAC_SECRET,INTERVAL_SEC,USE_GZIP,HTTP_TIMEOUT_SEC,SOURCE_FILE /usr/bin/python3 /usr/lib/touchway-adsb-forwarder/forward.py --once
             ' 2>&1
           )"
 
@@ -113,10 +113,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          lifecycle_dir="$(mktemp -d /tmp/adsb-forwarder-lifecycle.XXXXXX)"
-          stub_dir="$(mktemp -d /tmp/adsb-forwarder-lifecycle-systemctl.XXXXXX)"
-          upgrade_log="$(mktemp /tmp/adsb-forwarder-upgrade-log.XXXXXX)"
-          reinstall_log="$(mktemp /tmp/adsb-forwarder-reinstall-log.XXXXXX)"
+          lifecycle_dir="$(mktemp -d /tmp/touchway-adsb-forwarder-lifecycle.XXXXXX)"
+          stub_dir="$(mktemp -d /tmp/touchway-adsb-forwarder-lifecycle-systemctl.XXXXXX)"
+          upgrade_log="$(mktemp /tmp/touchway-adsb-forwarder-upgrade-log.XXXXXX)"
+          reinstall_log="$(mktemp /tmp/touchway-adsb-forwarder-reinstall-log.XXXXXX)"
 
           python scripts/build_deb.py --output-dir "${lifecycle_dir}/v1" --package-version 0.0.1
           python scripts/build_deb.py --output-dir "${lifecycle_dir}/v2" --package-version 0.0.2
@@ -128,29 +128,29 @@ jobs:
           EOF
           chmod +x "${stub_dir}/systemctl"
 
-          if dpkg -s adsb-forwarder >/dev/null 2>&1; then
-            sudo env "PATH=${stub_dir}:$PATH" "SYSTEMCTL_LOG=${upgrade_log}" apt-get purge -y adsb-forwarder
+          if dpkg -s touchway-adsb-forwarder >/dev/null 2>&1; then
+            sudo env "PATH=${stub_dir}:$PATH" "SYSTEMCTL_LOG=${upgrade_log}" apt-get purge -y touchway-adsb-forwarder
             : > "${upgrade_log}"
           fi
 
           sudo env "PATH=${stub_dir}:$PATH" "SYSTEMCTL_LOG=${upgrade_log}" \
-            apt-get install -y "${lifecycle_dir}"/v1/adsb-forwarder_0.0.1_all.deb
-          if grep -Fq "restart adsb-forwarder.service" "${upgrade_log}"; then
+            apt-get install -y "${lifecycle_dir}"/v1/touchway-adsb-forwarder_0.0.1_all.deb
+          if grep -Fq "restart touchway-adsb-forwarder.service" "${upgrade_log}"; then
             echo "first install in lifecycle smoke must not restart the service" >&2
             exit 1
           fi
 
           : > "${upgrade_log}"
           sudo env "PATH=${stub_dir}:$PATH" "SYSTEMCTL_LOG=${upgrade_log}" \
-            apt-get install -y "${lifecycle_dir}"/v2/adsb-forwarder_0.0.2_all.deb
-          grep -Fq "restart adsb-forwarder.service" "${upgrade_log}"
+            apt-get install -y "${lifecycle_dir}"/v2/touchway-adsb-forwarder_0.0.2_all.deb
+          grep -Fq "restart touchway-adsb-forwarder.service" "${upgrade_log}"
 
           sudo env "PATH=${stub_dir}:$PATH" "SYSTEMCTL_LOG=${reinstall_log}" \
-            apt-get install --reinstall -y "${lifecycle_dir}"/v2/adsb-forwarder_0.0.2_all.deb
-          grep -Fq "restart adsb-forwarder.service" "${reinstall_log}"
+            apt-get install --reinstall -y "${lifecycle_dir}"/v2/touchway-adsb-forwarder_0.0.2_all.deb
+          grep -Fq "restart touchway-adsb-forwarder.service" "${reinstall_log}"
 
       - name: Verify systemd unit syntax
-        run: sudo systemd-analyze verify /lib/systemd/system/adsb-forwarder.service
+        run: sudo systemd-analyze verify /lib/systemd/system/touchway-adsb-forwarder.service
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

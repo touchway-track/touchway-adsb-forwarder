@@ -32,14 +32,14 @@ def test_resolve_package_version_falls_back_to_git_sha():
 def test_render_control_matches_package_contract():
     control = build_deb.render_control("1.2.3")
 
-    assert "Package: adsb-forwarder" in control
+    assert "Package: touchway-adsb-forwarder" in control
     assert "Version: 1.2.3" in control
     assert "Architecture: all" in control
     assert "Depends: python3, systemd" in control
 
 
 def test_package_basename_matches_release_asset_contract():
-    assert build_deb.package_basename("1.2.3") == "adsb-forwarder_1.2.3_all"
+    assert build_deb.package_basename("1.2.3") == "touchway-adsb-forwarder_1.2.3_all"
 
 
 def test_build_package_stages_expected_files(tmp_path, monkeypatch):
@@ -62,13 +62,13 @@ def test_build_package_stages_expected_files(tmp_path, monkeypatch):
 
     deb_path, checksum_path = build_deb.build_package("1.2.3", tmp_path)
 
-    assert deb_path.name == "adsb-forwarder_1.2.3_all.deb"
-    assert checksum_path.name == "adsb-forwarder_1.2.3_all.deb.sha256"
+    assert deb_path.name == "touchway-adsb-forwarder_1.2.3_all.deb"
+    assert checksum_path.name == "touchway-adsb-forwarder_1.2.3_all.deb.sha256"
     assert "DEBIAN/control" in staged_paths
     assert "DEBIAN/conffiles" in staged_paths
     assert "DEBIAN/postinst" in staged_paths
     assert "DEBIAN/prerm" in staged_paths
     assert "DEBIAN/postrm" in staged_paths
-    assert "etc/adsb-forwarder/forwarder.env" in staged_paths
-    assert "lib/systemd/system/adsb-forwarder.service" in staged_paths
-    assert "usr/lib/adsb-forwarder/forward.py" in staged_paths
+    assert "etc/touchway-adsb-forwarder/forwarder.env" in staged_paths
+    assert "lib/systemd/system/touchway-adsb-forwarder.service" in staged_paths
+    assert "usr/lib/touchway-adsb-forwarder/forward.py" in staged_paths

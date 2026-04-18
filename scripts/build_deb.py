@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 
-PACKAGE_NAME = "adsb-forwarder"
+PACKAGE_NAME = "touchway-adsb-forwarder"
 PACKAGE_ARCH = "all"
 DEB_VERSION_RE = re.compile(r"^[0-9A-Za-z.+:~-]+$")
 
@@ -72,7 +72,7 @@ def render_control(version: str) -> str:
             f"Architecture: {PACKAGE_ARCH}",
             "Depends: python3, systemd",
             "Maintainer: Touchway Track",
-            "Description: Forward ADS-B data from dump1090-fa to a backend API",
+            "Description: Touchway ADS-B forwarder for dump1090-fa backends",
             " This package installs the Python forwarder, a native systemd unit,",
             " and the runtime environment template for Raspberry Pi OS Bookworm.",
             "",
@@ -105,25 +105,28 @@ def build_package(version: str, output_dir: Path) -> tuple[Path, Path]:
     deb_path = output_dir / f"{package_basename(version)}.deb"
     checksum_path = output_dir / f"{package_basename(version)}.deb.sha256"
 
-    with tempfile.TemporaryDirectory(prefix="adsb-forwarder-deb-") as temp_dir:
+    with tempfile.TemporaryDirectory(prefix="touchway-adsb-forwarder-deb-") as temp_dir:
         staging_root = Path(temp_dir)
         debian_dir = staging_root / "DEBIAN"
+        config_dir = staging_root / "etc" / PACKAGE_NAME
+        systemd_dir = staging_root / "lib/systemd/system"
+        lib_dir = staging_root / "usr/lib" / PACKAGE_NAME
         debian_dir.mkdir(mode=0o755)
 
         write_text(debian_dir / "control", render_control(version), 0o644)
-        write_text(debian_dir / "conffiles", "/etc/adsb-forwarder/forwarder.env\n", 0o644)
+        write_text(debian_dir / "conffiles", f"/etc/{PACKAGE_NAME}/forwarder.env\n", 0o644)
 
         copy_file(POSTINST_TEMPLATE_PATH, debian_dir / "postinst", 0o755)
         copy_file(PRERM_TEMPLATE_PATH, debian_dir / "prerm", 0o755)
         copy_file(POSTRM_TEMPLATE_PATH, debian_dir / "postrm", 0o755)
 
-        copy_file(ENV_TEMPLATE_PATH, staging_root / "etc/adsb-forwarder/forwarder.env", 0o640)
+        copy_file(ENV_TEMPLATE_PATH, config_dir / "forwarder.env", 0o640)
         copy_file(
             SERVICE_TEMPLATE_PATH,
-            staging_root / "lib/systemd/system/adsb-forwarder.service",
+            systemd_dir / f"{PACKAGE_NAME}.service",
             0o644,
         )
-        copy_file(FORWARDER_PATH, staging_root / "usr/lib/adsb-forwarder/forward.py", 0o644)
+        copy_file(FORWARDER_PATH, lib_dir / "forward.py", 0o644)
 
         try:
             subprocess.run(
@@ -143,7 +146,7 @@ def build_package(version: str, output_dir: Path) -> tuple[Path, Path]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build the adsb-forwarder Debian package")
+    parser = argparse.ArgumentParser(description="Build the touchway-adsb-forwarder Debian package")
     parser.add_argument(
         "--output-dir",
         default=str(ROOT / "dist"),

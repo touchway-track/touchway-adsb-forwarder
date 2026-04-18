@@ -1,10 +1,10 @@
-# ADS-B Forwarder
+# Touchway ADS-B Forwarder
 
 A lightweight Python service that reads ADS-B data from `dump1090-fa` and forwards it to a backend API.
 
 The project supports two modes:
 
-- Production: install the native Debian package `adsb-forwarder_<version>_all.deb` and run `adsb-forwarder.service`.
+- Production: install the native Debian package `touchway-adsb-forwarder_<version>_all.deb` and run `touchway-adsb-forwarder.service`.
 - Development: run the source locally with `docker-compose.dev.yml` and the sample feed.
 
 ## Features
@@ -19,7 +19,7 @@ The project supports two modes:
 ## Repository Structure
 
 ```text
-adsb-forwarder/
+touchway-adsb-forwarder/
 ├─ .docker/
 │  └─ dev.env
 ├─ .github/
@@ -28,7 +28,7 @@ adsb-forwarder/
 │  └─ workflows/
 │     └─ build.yml
 ├─ packaging/
-│  ├─ adsb-forwarder.service
+│  ├─ touchway-adsb-forwarder.service
 │  ├─ postinst
 │  ├─ postrm
 │  └─ prerm
@@ -51,28 +51,28 @@ adsb-forwarder/
 
 ### Public deployment interfaces
 
-- Package: `adsb-forwarder_<version>_all.deb`
-- Service: `adsb-forwarder.service`
-- Config: `/etc/adsb-forwarder/forwarder.env`
-- Installed code: `/usr/lib/adsb-forwarder/forward.py`
+- Package: `touchway-adsb-forwarder_<version>_all.deb`
+- Service: `touchway-adsb-forwarder.service`
+- Config: `/etc/touchway-adsb-forwarder/forwarder.env`
+- Installed code: `/usr/lib/touchway-adsb-forwarder/forward.py`
 
 ### Install
 
-1. Download `adsb-forwarder_<version>_all.deb` and `adsb-forwarder_<version>_all.deb.sha256` from the GitHub Release.
+1. Download `touchway-adsb-forwarder_<version>_all.deb` and `touchway-adsb-forwarder_<version>_all.deb.sha256` from the GitHub Release.
 2. Verify the checksum.
 3. Install the package.
-4. Edit `/etc/adsb-forwarder/forwarder.env`.
+4. Edit `/etc/touchway-adsb-forwarder/forwarder.env`.
 5. Enable and start the service.
 
 ```bash
-sha256sum -c adsb-forwarder_<version>_all.deb.sha256
-sudo apt install ./adsb-forwarder_<version>_all.deb
-sudoedit /etc/adsb-forwarder/forwarder.env
-sudo systemctl enable --now adsb-forwarder
+sha256sum -c touchway-adsb-forwarder_<version>_all.deb.sha256
+sudo apt install ./touchway-adsb-forwarder_<version>_all.deb
+sudoedit /etc/touchway-adsb-forwarder/forwarder.env
+sudo systemctl enable --now touchway-adsb-forwarder
 ```
 
 The package installs the service stopped and disabled. It does not enable or start the unit automatically.
-You must edit `/etc/adsb-forwarder/forwarder.env` before the first `enable --now`.
+You must edit `/etc/touchway-adsb-forwarder/forwarder.env` before the first `enable --now`.
 
 ### Configuration
 
@@ -87,8 +87,8 @@ SOURCE_FILE=/run/dump1090-fa/aircraft.json
 ### Verify
 
 ```bash
-sudo systemctl status adsb-forwarder
-sudo journalctl -u adsb-forwarder -f
+sudo systemctl status touchway-adsb-forwarder
+sudo journalctl -u touchway-adsb-forwarder -f
 ```
 
 ### Upgrade
@@ -96,15 +96,15 @@ sudo journalctl -u adsb-forwarder -f
 Install the new package version over the existing one:
 
 ```bash
-sudo apt install ./adsb-forwarder_<new-version>_all.deb
+sudo apt install ./touchway-adsb-forwarder_<new-version>_all.deb
 ```
 
-The package reloads `systemd` and restarts `adsb-forwarder.service` automatically during upgrade.
+The package reloads `systemd` and restarts `touchway-adsb-forwarder.service` automatically during upgrade.
 If that restart fails, `apt` fails and you should inspect:
 
 ```bash
-sudo systemctl status adsb-forwarder
-sudo journalctl -u adsb-forwarder -n 100
+sudo systemctl status touchway-adsb-forwarder
+sudo journalctl -u touchway-adsb-forwarder -n 100
 ```
 
 ### Rollback
@@ -112,7 +112,7 @@ sudo journalctl -u adsb-forwarder -n 100
 Reinstall the previous package version:
 
 ```bash
-sudo apt install ./adsb-forwarder_<previous-version>_all.deb
+sudo apt install ./touchway-adsb-forwarder_<previous-version>_all.deb
 ```
 
 Rollback follows the same package lifecycle as upgrade: the unit is restarted automatically and package configuration fails if the restart fails.
@@ -123,7 +123,7 @@ For a release candidate on Raspberry Pi OS Bookworm:
 
 1. Install the `.deb` from the release.
 2. Keep `SOURCE_FILE=/run/dump1090-fa/aircraft.json`.
-3. Start `adsb-forwarder.service`.
+3. Start `touchway-adsb-forwarder.service`.
 4. Confirm normal forwarding in `journalctl`.
 5. Reboot and confirm the service auto-starts.
 
@@ -177,7 +177,7 @@ Every PR and push validates:
 - package installation on the runner
 - one-shot execution of the installed forwarder against a sample feed and a dead local port
 - package upgrade and `--reinstall` lifecycle smoke with restart verification
-- `systemd-analyze verify /lib/systemd/system/adsb-forwarder.service`
+- `systemd-analyze verify /lib/systemd/system/touchway-adsb-forwarder.service`
 
 On `main`, the workflow keeps the existing semver rules:
 
@@ -188,12 +188,12 @@ On `main`, the workflow keeps the existing semver rules:
 
 When a semver release is created or reused on `HEAD`, GitHub Actions uploads:
 
-- `adsb-forwarder_<version>_all.deb`
-- `adsb-forwarder_<version>_all.deb.sha256`
+- `touchway-adsb-forwarder_<version>_all.deb`
+- `touchway-adsb-forwarder_<version>_all.deb.sha256`
 
 ## Environment Variables
 
-Runtime variables belong in `/etc/adsb-forwarder/forwarder.env` in production and `.docker/dev.env` for local development.
+Runtime variables belong in `/etc/touchway-adsb-forwarder/forwarder.env` in production and `.docker/dev.env` for local development.
 
 | Variable | Description | Default |
 | --- | --- | --- |
@@ -209,7 +209,7 @@ If `FEEDER_ID` is omitted, the forwarder falls back to `/var/cache/piaware/feede
 
 ## Security
 
-- Runs as the `adsb-forwarder` system user.
+- Runs as the `touchway-adsb-forwarder` system user.
 - Uses `NoNewPrivileges=yes`.
 - Uses `PrivateTmp=yes`.
 - Uses `ProtectSystem=strict`.

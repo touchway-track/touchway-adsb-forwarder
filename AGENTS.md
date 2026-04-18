@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides **agent-focused guidance** for working with the ADS-B Forwarder project.  
+This file provides **agent-focused guidance** for working with the Touchway ADS-B Forwarder project.  
 It complements the human-friendly `README.md` by documenting extra details coding agents need: build steps, conventions, and CI/CD expectations.
 
 ---
@@ -47,7 +47,7 @@ python3 scripts/build_deb.py
 
 ### Release Build (CI/CD)
 
-- GitHub Actions workflow (`.github/workflows/build.yml`) builds `adsb-forwarder_<version>_all.deb`.
+- GitHub Actions workflow (`.github/workflows/build.yml`) builds `touchway-adsb-forwarder_<version>_all.deb`.
 - Release assets are uploaded to the GitHub Release together with a `.sha256` checksum file.
 - Package version in CI must use the semver version without the `v` prefix.
 
@@ -73,8 +73,8 @@ pytest -v
 ### Integration Testing
 
 - Use `docker-compose.dev.yml` to simulate data flow during local development.
-- CI must also smoke test the installed `.deb` by running `/usr/lib/adsb-forwarder/forward.py --once`.
-- CI must validate package upgrade and `--reinstall` flows, including the automatic restart contract for `adsb-forwarder.service`.
+- CI must also smoke test the installed `.deb` by running `/usr/lib/touchway-adsb-forwarder/forward.py --once`.
+- CI must validate package upgrade and `--reinstall` flows, including the automatic restart contract for `touchway-adsb-forwarder.service`.
 
 ---
 
@@ -100,7 +100,7 @@ flake8 forward.py
 
 - Feeder devices run in remote/untrusted environments → the `systemd` service must stay locked down.
 - Sensitive values (`HMAC_SECRET`, `BACKEND_URL`) are injected via `.env` file and **never** hardcoded.
-- Keep the service running as the `adsb-forwarder` system user.
+- Keep the service running as the `touchway-adsb-forwarder` system user.
 - Preserve `systemd` hardening such as `NoNewPrivileges=yes` and `ProtectSystem=strict`.
 
 ---
@@ -120,17 +120,17 @@ flake8 forward.py
 ## Deployment Steps
 
 1. SSH into feeder via Tailscale.
-2. Download `adsb-forwarder_<version>_all.deb` and `adsb-forwarder_<version>_all.deb.sha256`.
+2. Download `touchway-adsb-forwarder_<version>_all.deb` and `touchway-adsb-forwarder_<version>_all.deb.sha256`.
 3. Verify the checksum.
 4. Install the package with `apt`.
-5. Edit `/etc/adsb-forwarder/forwarder.env`.
+5. Edit `/etc/touchway-adsb-forwarder/forwarder.env`.
 6. Enable and start the service:
 
 ```bash
-sha256sum -c adsb-forwarder_<version>_all.deb.sha256
-sudo apt install ./adsb-forwarder_<version>_all.deb
-sudoedit /etc/adsb-forwarder/forwarder.env
-sudo systemctl enable --now adsb-forwarder
+sha256sum -c touchway-adsb-forwarder_<version>_all.deb.sha256
+sudo apt install ./touchway-adsb-forwarder_<version>_all.deb
+sudoedit /etc/touchway-adsb-forwarder/forwarder.env
+sudo systemctl enable --now touchway-adsb-forwarder
 ```
 
 The first install keeps the service stopped and disabled. Package upgrade, reinstall, and rollback restart the service automatically and fail the `apt` transaction if the restart fails.
@@ -138,8 +138,8 @@ The first install keeps the service stopped and disabled. Package upgrade, reins
 7. Logs:
 
 ```bash
-sudo systemctl status adsb-forwarder
-sudo journalctl -u adsb-forwarder -f
+sudo systemctl status touchway-adsb-forwarder
+sudo journalctl -u touchway-adsb-forwarder -f
 ```
 
 ---

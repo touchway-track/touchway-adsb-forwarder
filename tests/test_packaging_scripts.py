@@ -90,13 +90,13 @@ def test_postinst_initial_install_keeps_service_disabled(tmp_path):
 
     assert completed.returncode == 0
     assert "The service is still stopped and disabled." in completed.stdout
-    assert "sudoedit /etc/adsb-forwarder/forwarder.env" in completed.stdout
+    assert "sudoedit /etc/touchway-adsb-forwarder/forwarder.env" in completed.stdout
     assert "systemctl daemon-reload" in log_lines
-    assert "systemctl restart adsb-forwarder.service" not in log_lines
-    assert "addgroup --system adsb-forwarder" in log_lines
+    assert "systemctl restart touchway-adsb-forwarder.service" not in log_lines
+    assert "addgroup --system touchway-adsb-forwarder" in log_lines
     assert (
-        "adduser --system --ingroup adsb-forwarder --no-create-home --home /usr/lib/adsb-forwarder "
-        "--shell /usr/sbin/nologin adsb-forwarder"
+        "adduser --system --ingroup touchway-adsb-forwarder --no-create-home --home /usr/lib/touchway-adsb-forwarder "
+        "--shell /usr/sbin/nologin touchway-adsb-forwarder"
     ) in log_lines
 
 
@@ -111,7 +111,7 @@ def test_postinst_upgrade_restarts_service(tmp_path):
     assert completed.returncode == 0
     assert completed.stdout == ""
     assert "systemctl daemon-reload" in log_lines
-    assert "systemctl restart adsb-forwarder.service" in log_lines
+    assert "systemctl restart touchway-adsb-forwarder.service" in log_lines
 
 
 def test_postinst_upgrade_fails_when_restart_fails(tmp_path):
@@ -125,12 +125,12 @@ def test_postinst_upgrade_fails_when_restart_fails(tmp_path):
 
     assert completed.returncode != 0
     assert "systemctl daemon-reload" in log_lines
-    assert "systemctl restart adsb-forwarder.service" in log_lines
-    assert "failed to restart adsb-forwarder.service during package upgrade" in completed.stderr
+    assert "systemctl restart touchway-adsb-forwarder.service" in log_lines
+    assert "failed to restart touchway-adsb-forwarder.service during package upgrade" in completed.stderr
 
 
 def test_prerm_stops_service_before_upgrade(tmp_path):
     completed, log_lines = run_packaging_script(tmp_path, "prerm", "upgrade")
 
     assert completed.returncode == 0
-    assert "systemctl stop adsb-forwarder.service" in log_lines
+    assert "systemctl stop touchway-adsb-forwarder.service" in log_lines

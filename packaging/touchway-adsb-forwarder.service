@@ -1,16 +1,16 @@
 [Unit]
-Description=ADS-B Forwarder
+Description=Touchway ADS-B Forwarder
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=adsb-forwarder
-Group=adsb-forwarder
-EnvironmentFile=/etc/adsb-forwarder/forwarder.env
-WorkingDirectory=/usr/lib/adsb-forwarder
+User=touchway-adsb-forwarder
+Group=touchway-adsb-forwarder
+EnvironmentFile=/etc/touchway-adsb-forwarder/forwarder.env
+WorkingDirectory=/usr/lib/touchway-adsb-forwarder
 ExecStartPre=/bin/sh -c '[ -n "$BACKEND_URL" ] && [ -n "$HMAC_SECRET" ]'
-ExecStart=/usr/bin/python3 /usr/lib/adsb-forwarder/forward.py
+ExecStart=/usr/bin/python3 /usr/lib/touchway-adsb-forwarder/forward.py
 Restart=always
 RestartSec=5
 NoNewPrivileges=yes

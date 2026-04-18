@@ -4,7 +4,7 @@ set -eu
 case "${1:-remove}" in
     remove|upgrade|deconfigure|failed-upgrade)
         if command -v systemctl >/dev/null 2>&1; then
-            systemctl stop adsb-forwarder.service >/dev/null 2>&1 || true
+            systemctl stop touchway-adsb-forwarder.service >/dev/null 2>&1 || true
         fi
         ;;
 esac

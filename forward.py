@@ -73,7 +73,7 @@ def send_once():
     # Prepare HTTP headers
     headers = {
         "Content-Type": "application/json",
-        "User-Agent": "adsb-forwarder/1.0"
+        "User-Agent": "touchway-adsb-forwarder/1.0"
     }
     if USE_GZIP:
         headers["Content-Encoding"] = "gzip"

@@ -3,7 +3,7 @@ version: "3.8"
 services:
   forwarder:
     image: python:3.12.6-slim-bookworm
-    container_name: adsb-forwarder-dev
+    container_name: touchway-adsb-forwarder-dev
     working_dir: /app
     command: ["python", "forward.py"]
     restart: unless-stopped
