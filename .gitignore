@@ -2,3 +2,4 @@ forwarder.env
 *.env
 !.docker/dev.env
 __pycache__/
+dist/

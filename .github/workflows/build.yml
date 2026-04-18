@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -32,27 +34,69 @@ jobs:
       - name: Run pytest
         run: pytest -q
 
-      - name: Build Docker image
-        run: docker build -t adsb-forwarder:pr .
-
-      - name: Smoke test Docker image
+      - name: Resolve validation package version
+        id: package_version
         shell: bash
         run: |
           set -euo pipefail
+          release_version="$(
+            python .github/scripts/next_semver.py |
+            awk -F= '$1 == "release_version" { print $2 }'
+          )"
+          if [[ -n "${release_version}" ]]; then
+            echo "package_version=${release_version}" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Build Debian package
+        env:
+          PACKAGE_VERSION: ${{ steps.package_version.outputs.package_version }}
+        run: python scripts/build_deb.py --output-dir dist
+
+      - name: Inspect Debian package
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb_path="$(echo dist/adsb-forwarder_*_all.deb)"
+          dpkg-deb -I "${deb_path}"
+          dpkg-deb -c "${deb_path}"
+
+      - name: Install package and run smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb_path="$(echo dist/adsb-forwarder_*_all.deb)"
+          sample_json="$(mktemp /tmp/adsb-forwarder-aircraft.XXXXXX.json)"
+          cp examples/aircraft.sample.json "${sample_json}"
+          chmod 644 "${sample_json}"
+
+          sudo apt-get install -y "./${deb_path}"
+
+          sudo tee /etc/adsb-forwarder/forwarder.env >/dev/null <<EOF
+          BACKEND_URL=http://127.0.0.1:9
+          FEEDER_ID=smoke
+          HMAC_SECRET=test
+          INTERVAL_SEC=3
+          USE_GZIP=1
+          HTTP_TIMEOUT_SEC=5
+          SOURCE_FILE=${sample_json}
+          EOF
+          sudo chmod 640 /etc/adsb-forwarder/forwarder.env
+
           output="$(
-            docker run --rm \
-              -e BACKEND_URL=http://127.0.0.1:9 \
-              -e FEEDER_ID=smoke \
-              -e SOURCE_FILE=/tmp/aircraft.json \
-              -v "$PWD/examples/aircraft.sample.json:/tmp/aircraft.json:ro" \
-              --entrypoint python \
-              adsb-forwarder:pr \
-              /app/forward.py --once \
-              2>&1
+            sudo bash -lc '
+              set -a
+              . /etc/adsb-forwarder/forwarder.env
+              set +a
+              exec sudo -u adsb-forwarder --preserve-env=BACKEND_URL,FEEDER_ID,HMAC_SECRET,INTERVAL_SEC,USE_GZIP,HTTP_TIMEOUT_SEC,SOURCE_FILE /usr/bin/python3 /usr/lib/adsb-forwarder/forward.py --once
+            ' 2>&1
           )"
 
-          printf '%s\n' "$output"
-          grep -Fq "network error while reaching" <<<"$output"
+          printf '%s\n' "${output}"
+          grep -Fq "network error while reaching" <<<"${output}"
+          grep -Fq "http://127.0.0.1:9" <<<"${output}"
+
+      - name: Verify systemd unit syntax
+        run: sudo systemd-analyze verify /lib/systemd/system/adsb-forwarder.service
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -101,66 +145,30 @@ jobs:
             --generate-notes
 
   publish:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.release_needed == 'true'
     needs:
       - validate
       - release
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          python-version: "3.12"
 
-      - name: Resolve image metadata
-        id: image
-        shell: bash
+      - name: Build release package
         env:
+          PACKAGE_VERSION: ${{ needs.release.outputs.release_version }}
+        run: python scripts/build_deb.py --output-dir dist
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
-          RELEASE_VERSION: ${{ needs.release.outputs.release_version }}
-        run: |
-          set -euo pipefail
-
-          image="ghcr.io/touchway-track/touchway-adsb-forwarder"
-          version="sha-${GITHUB_SHA}"
-          if [[ -n "${RELEASE_VERSION}" ]]; then
-            version="${RELEASE_VERSION}"
-          fi
-
-          {
-            echo "image=${image}"
-            echo "version=${version}"
-            echo "tags<<EOF"
-            echo "${image}:sha-${GITHUB_SHA}"
-            if [[ -n "${RELEASE_TAG}" ]]; then
-              echo "${image}:${RELEASE_TAG}"
-            fi
-            echo "EOF"
-          } >> "${GITHUB_OUTPUT}"
-
-      - name: Build and publish image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          platforms: linux/arm/v7,linux/arm64,linux/amd64
-          tags: ${{ steps.image.outputs.tags }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ steps.image.outputs.version }}
+        run: gh release upload "${RELEASE_TAG}" dist/*.deb dist/*.sha256 --clobber

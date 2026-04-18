@@ -1,0 +1,24 @@
+[Unit]
+Description=ADS-B Forwarder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=adsb-forwarder
+Group=adsb-forwarder
+EnvironmentFile=/etc/adsb-forwarder/forwarder.env
+WorkingDirectory=/usr/lib/adsb-forwarder
+ExecStartPre=/bin/sh -c '[ -n "$BACKEND_URL" ] && [ -n "$HMAC_SECRET" ]'
+ExecStart=/usr/bin/python3 /usr/lib/adsb-forwarder/forward.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/run/dump1090-fa
+ReadOnlyPaths=/var/cache/piaware
+
+[Install]
+WantedBy=multi-user.target

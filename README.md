@@ -1,20 +1,20 @@
 # ADS-B Forwarder
 
-A lightweight Python service that reads local ADS-B data from `dump1090-fa` and forwards it to a backend API.
+A lightweight Python service that reads ADS-B data from `dump1090-fa` and forwards it to a backend API.
 
-The project supports two operating modes:
+The project supports two modes:
 
-- Development: run local source code with `docker-compose.dev.yml`.
-- Production: deploy a published Docker image from GHCR with `docker-compose.prod.yml`.
+- Production: install the native Debian package `adsb-forwarder_<version>_all.deb` and run `adsb-forwarder.service`.
+- Development: run the source locally with `docker-compose.dev.yml` and the sample feed.
 
 ## Features
 
 - Reads aircraft data from `dump1090-fa` at `/run/dump1090-fa/aircraft.json`.
-- Sends compact JSON payloads to a backend endpoint.
+- Sends the existing compact JSON payload without changing the HTTP contract.
 - Supports optional gzip compression.
 - Supports optional HMAC-SHA256 request signing.
 - Uses only the Python standard library at runtime.
-- Ships as a multi-arch Docker image for `linux/arm/v7`, `linux/arm64`, and `linux/amd64`.
+- Preserves the existing environment variables and Piaware fallback for `FEEDER_ID`.
 
 ## Repository Structure
 
@@ -23,29 +23,110 @@ adsb-forwarder/
 ├─ .docker/
 │  └─ dev.env
 ├─ .github/
+│  ├─ scripts/
+│  │  └─ next_semver.py
 │  └─ workflows/
 │     └─ build.yml
-├─ compose.env.example
+├─ packaging/
+│  ├─ adsb-forwarder.service
+│  ├─ postinst
+│  ├─ postrm
+│  └─ prerm
+├─ scripts/
+│  └─ build_deb.py
 ├─ docker-compose.dev.yml
-├─ docker-compose.prod.yml
-├─ Dockerfile
 ├─ examples/
 │  └─ aircraft.sample.json
 ├─ forward.py
 ├─ tests/
-│  └─ test_forward.py
 └─ .env.example
 ```
 
+## Production
+
+### Supported target
+
+- Debian 12
+- Raspberry Pi OS Bookworm
+
+### Public deployment interfaces
+
+- Package: `adsb-forwarder_<version>_all.deb`
+- Service: `adsb-forwarder.service`
+- Config: `/etc/adsb-forwarder/forwarder.env`
+- Installed code: `/usr/lib/adsb-forwarder/forward.py`
+
+### Install
+
+1. Download `adsb-forwarder_<version>_all.deb` and `adsb-forwarder_<version>_all.deb.sha256` from the GitHub Release.
+2. Verify the checksum.
+3. Install the package.
+4. Edit `/etc/adsb-forwarder/forwarder.env`.
+5. Enable and start the service.
+
+```bash
+sha256sum -c adsb-forwarder_<version>_all.deb.sha256
+sudo apt install ./adsb-forwarder_<version>_all.deb
+sudoedit /etc/adsb-forwarder/forwarder.env
+sudo systemctl enable --now adsb-forwarder
+```
+
+The package installs the service stopped and disabled. It does not enable or start the unit automatically.
+
+### Configuration
+
+Set `FEEDER_ID` explicitly for native installs when possible. If you leave it blank, the forwarder still falls back to `/var/cache/piaware/feeder_id`.
+
+The default source file for production remains:
+
+```bash
+SOURCE_FILE=/run/dump1090-fa/aircraft.json
+```
+
+### Verify
+
+```bash
+sudo systemctl status adsb-forwarder
+sudo journalctl -u adsb-forwarder -f
+```
+
+### Upgrade
+
+Install the new package version over the existing one:
+
+```bash
+sudo apt install ./adsb-forwarder_<new-version>_all.deb
+sudo systemctl restart adsb-forwarder
+```
+
+### Rollback
+
+Reinstall the previous package version:
+
+```bash
+sudo apt install ./adsb-forwarder_<previous-version>_all.deb
+sudo systemctl restart adsb-forwarder
+```
+
+### Manual Raspberry Pi validation
+
+For a release candidate on Raspberry Pi OS Bookworm:
+
+1. Install the `.deb` from the release.
+2. Keep `SOURCE_FILE=/run/dump1090-fa/aircraft.json`.
+3. Start `adsb-forwarder.service`.
+4. Confirm normal forwarding in `journalctl`.
+5. Reboot and confirm the service auto-starts.
+
 ## Development
 
-Run the forwarder locally against the sample aircraft feed:
+Local development stays Docker-based and uses the sample feed.
 
 ```bash
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-Development uses:
+The development stack uses:
 
 - source bind-mount of `forward.py`
 - sample feed at `examples/aircraft.sample.json`
@@ -57,160 +138,73 @@ To inspect the rendered stack:
 docker compose -f docker-compose.dev.yml config
 ```
 
-## Production
+## Packaging
 
-Production deploys a published image, not a host-mounted `forward.py`.
-
-### 1. Initial setup on the feeder
-
-Clone the repo once so the host has the Compose file and templates:
+Build a local package with the git-based fallback version:
 
 ```bash
-sudo install -d -m 755 /opt/adsb-forwarder
-sudo chown "$USER":"$USER" /opt/adsb-forwarder
-git clone https://github.com/touchway-track/touchway-adsb-forwarder.git /opt/adsb-forwarder
+python3 scripts/build_deb.py
 ```
 
-Create the runtime env file used by the application:
+Build a release package explicitly:
 
 ```bash
-cp /opt/adsb-forwarder/.env.example /opt/adsb-forwarder/forwarder.env
-nano /opt/adsb-forwarder/forwarder.env
+PACKAGE_VERSION=1.2.3 python3 scripts/build_deb.py --output-dir dist
 ```
 
-`/opt/adsb-forwarder/forwarder.env` is only for application runtime values such as `BACKEND_URL`, `HMAC_SECRET`, and optional `FEEDER_ID`.
+The local fallback version format is:
 
-Create the Compose variable file used to select the image tag:
-
-```bash
-cp /opt/adsb-forwarder/compose.env.example /opt/adsb-forwarder/.env
-nano /opt/adsb-forwarder/.env
+```text
+0.0.0~git<shortsha>
 ```
 
-`/opt/adsb-forwarder/.env` is only for Compose interpolation and must define `IMAGE_TAG=...`.
+## GitHub Actions and Releases
 
-### 2. Deploy
-
-```bash
-cd /opt/adsb-forwarder
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-```
-
-The production stack mounts only runtime files and directories from the host:
-
-- `/opt/adsb-forwarder/forwarder.env`
-- `/run/dump1090-fa`
-- `/var/cache/piaware`
-
-The container image already contains `forward.py`.
-
-### 3. Upgrade
-
-Edit `/opt/adsb-forwarder/.env` and change `IMAGE_TAG` to the new published tag, then run:
-
-```bash
-cd /opt/adsb-forwarder
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-```
-
-### 4. Rollback
-
-Set `IMAGE_TAG` back to the previous tag in `/opt/adsb-forwarder/.env`, then run the same commands:
-
-```bash
-cd /opt/adsb-forwarder
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-```
-
-### 5. Inspect the rendered production stack
-
-```bash
-docker compose -f docker-compose.prod.yml config
-```
-
-### Optional: start on boot with systemd
-
-```ini
-# /etc/systemd/system/adsb-forwarder-compose.service
-[Unit]
-Description=ADSB forwarder via Docker Compose
-After=docker.service network-online.target
-Wants=docker.service network-online.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/opt/adsb-forwarder
-ExecStart=/usr/bin/docker compose -f docker-compose.prod.yml up -d
-ExecStop=/usr/bin/docker compose -f docker-compose.prod.yml down
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable it with:
-
-```bash
-sudo systemctl enable --now adsb-forwarder-compose.service
-```
-
-The systemd unit is only for boot-time startup. Normal upgrades and rollbacks should still be done by changing `IMAGE_TAG` and running `pull` plus `up -d`.
-
-## GitHub Actions, Releases, and Image Tags
-
-GitHub Actions validates every PR with:
+Every PR and push validates:
 
 - `pytest -q`
-- `docker build -t adsb-forwarder:pr .`
-- a short smoke test against the built image
+- `.deb` build with `scripts/build_deb.py`
+- `dpkg-deb -I` and `dpkg-deb -c`
+- package installation on the runner
+- one-shot execution of the installed forwarder against a sample feed and a dead local port
+- `systemd-analyze verify /lib/systemd/system/adsb-forwarder.service`
 
-On every push to `main`, the workflow always publishes:
-
-- `ghcr.io/touchway-track/touchway-adsb-forwarder:sha-<commit>`
-
-The workflow also creates a GitHub Release and a matching semver image tag when the commits since the last release contain releasable Conventional Commits:
+On `main`, the workflow keeps the existing semver rules:
 
 - `feat` => minor bump
 - `fix`, `perf`, `refactor`, `build`, `chore` => patch bump
 - `!` or `BREAKING CHANGE:` => major bump
-- `docs`, `test`, `style`, `ci` => no semver release by themselves
+- `docs`, `test`, `style`, `ci` => no release by themselves
 
-When a semver release is created, the same workflow publishes both:
+When a semver release is created or reused on `HEAD`, GitHub Actions uploads:
 
-- `ghcr.io/touchway-track/touchway-adsb-forwarder:vX.Y.Z`
-- `ghcr.io/touchway-track/touchway-adsb-forwarder:sha-<commit>`
-
-No `latest` tag is published.
-
-Production should normally consume immutable tags such as `v1.2.3`. The `sha-<commit>` tags remain available for audit, testing, and rollback to an exact commit.
+- `adsb-forwarder_<version>_all.deb`
+- `adsb-forwarder_<version>_all.deb.sha256`
 
 ## Environment Variables
 
-Runtime variables belong in `/opt/adsb-forwarder/forwarder.env`.
+Runtime variables belong in `/etc/adsb-forwarder/forwarder.env` in production and `.docker/dev.env` for local development.
 
-| Variable           | Description                                                   | Default |
-|--------------------|---------------------------------------------------------------|---------|
-| `BACKEND_URL`      | Target API endpoint                                           | none; required |
-| `FEEDER_ID`        | Unique feeder identifier; overrides Piaware auto-detect       | auto-detect from Piaware if omitted |
-| `HMAC_SECRET`      | Secret used to sign payloads                                  | none; required in supported production deploy |
-| `INTERVAL_SEC`     | Interval between sends, in seconds                            | `3` |
-| `HTTP_TIMEOUT_SEC` | HTTP timeout, in seconds                                      | `5` |
-| `USE_GZIP`         | Compress payload with gzip when set to `1`                    | `1` |
-| `SOURCE_FILE`      | Path to `aircraft.json` inside the container                  | `/run/dump1090-fa/aircraft.json` |
+| Variable | Description | Default |
+| --- | --- | --- |
+| `BACKEND_URL` | Target API endpoint | none; required |
+| `FEEDER_ID` | Unique feeder identifier; recommended explicitly for native install | auto-detect from Piaware if omitted |
+| `HMAC_SECRET` | Secret used to sign payloads | none; required |
+| `INTERVAL_SEC` | Interval between sends, in seconds | `3` |
+| `HTTP_TIMEOUT_SEC` | HTTP timeout, in seconds | `5` |
+| `USE_GZIP` | Compress payload with gzip when set to `1` | `1` |
+| `SOURCE_FILE` | Path to `aircraft.json` on the host or in the dev container | `/run/dump1090-fa/aircraft.json` |
 
 If `FEEDER_ID` is omitted, the forwarder falls back to `/var/cache/piaware/feeder_id`.
 
-`IMAGE_TAG` does not belong in `forwarder.env`; it belongs in `/opt/adsb-forwarder/.env`.
-
 ## Security
 
-- Runs as non-root inside Docker.
-- Drops all Linux capabilities.
-- Uses a read-only root filesystem.
-- Uses `tmpfs` for `/tmp`.
+- Runs as the `adsb-forwarder` system user.
+- Uses `NoNewPrivileges=yes`.
+- Uses `PrivateTmp=yes`.
+- Uses `ProtectSystem=strict`.
+- Uses `ProtectHome=yes`.
+- Uses read-only access to `/run/dump1090-fa` and `/var/cache/piaware`.
 - Supports HMAC signing so the backend can verify authenticity.
 
 ### HMAC request signing
@@ -223,9 +217,3 @@ Backend expectations:
 2. Compute the same HMAC with the feeder secret.
 3. Compare the digest using a constant-time comparison.
 4. Reject missing or invalid signatures.
-
-## Logs
-
-```bash
-docker logs -f adsb-forwarder
-```

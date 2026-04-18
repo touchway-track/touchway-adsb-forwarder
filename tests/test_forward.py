@@ -160,17 +160,21 @@ def test_env_example_matches_production_source_file():
     assert "SOURCE_FILE=/data/aircraft.json" not in env_example
 
 
-def test_compose_env_example_contains_image_tag():
-    compose_env_example = (ROOT / "compose.env.example").read_text(encoding="utf-8")
+def test_env_example_recommends_explicit_feeder_id_for_native_install():
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
-    assert "IMAGE_TAG=" in compose_env_example
-    assert "sha-REPLACE_WITH_PUBLISHED_TAG" in compose_env_example
+    assert "/etc/adsb-forwarder/forwarder.env" in env_example
+    assert "Set `FEEDER_ID` explicitly for native installs" in env_example
 
 
-def test_prod_compose_uses_published_image_and_runtime_mounts():
-    prod_compose = (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
+def test_systemd_unit_matches_native_deploy_contract():
+    service_unit = (ROOT / "packaging" / "adsb-forwarder.service").read_text(encoding="utf-8")
 
-    assert "ghcr.io/touchway-track/touchway-adsb-forwarder:${IMAGE_TAG" in prod_compose
-    assert "/opt/adsb-forwarder/forward.py:/app/forward.py:ro" not in prod_compose
-    assert "source: /run/dump1090-fa" in prod_compose
-    assert "/run/dump1090-fa/aircraft.json:/run/dump1090-fa/aircraft.json:ro" not in prod_compose
+    assert "User=adsb-forwarder" in service_unit
+    assert "Group=adsb-forwarder" in service_unit
+    assert "EnvironmentFile=/etc/adsb-forwarder/forwarder.env" in service_unit
+    assert "ExecStart=/usr/bin/python3 /usr/lib/adsb-forwarder/forward.py" in service_unit
+    assert "ExecStartPre=/bin/sh -c '[ -n \"$BACKEND_URL\" ] && [ -n \"$HMAC_SECRET\" ]'" in service_unit
+    assert "ProtectSystem=strict" in service_unit
+    assert "ReadOnlyPaths=/run/dump1090-fa" in service_unit
+    assert "ReadOnlyPaths=/var/cache/piaware" in service_unit

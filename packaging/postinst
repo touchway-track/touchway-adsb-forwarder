@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+case "${1:-configure}" in
+    configure)
+        if ! getent group adsb-forwarder >/dev/null 2>&1; then
+            addgroup --system adsb-forwarder >/dev/null
+        fi
+
+        if ! id adsb-forwarder >/dev/null 2>&1; then
+            adduser \
+                --system \
+                --ingroup adsb-forwarder \
+                --no-create-home \
+                --home /usr/lib/adsb-forwarder \
+                --shell /usr/sbin/nologin \
+                adsb-forwarder >/dev/null
+        fi
+
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl daemon-reload >/dev/null 2>&1 || true
+        fi
+
+        cat <<'EOF'
+adsb-forwarder installed.
+Edit /etc/adsb-forwarder/forwarder.env, then enable and start the service manually:
+  sudo systemctl enable --now adsb-forwarder
+  sudo systemctl status adsb-forwarder
+  sudo journalctl -u adsb-forwarder -f
+EOF
+        ;;
+esac
+
+exit 0
