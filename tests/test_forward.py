@@ -1,3 +1,4 @@
+import gzip
 import hashlib
 import hmac
 import importlib
@@ -6,6 +7,8 @@ import json
 import sys
 from pathlib import Path
 from urllib import error
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,7 +35,10 @@ def test_send_once_missing_source(tmp_path, monkeypatch, capsys):
     assert str(missing) in captured.err
 
 
-def test_send_once_uses_feeder_signature_header(tmp_path, monkeypatch):
+@pytest.mark.parametrize("use_gzip", [False, True])
+def test_send_once_uses_feeder_signature_header(
+    tmp_path, monkeypatch, use_gzip
+):
     sample = tmp_path / "aircraft.json"
     sample.write_text(
         json.dumps(
@@ -49,7 +55,7 @@ def test_send_once_uses_feeder_signature_header(tmp_path, monkeypatch):
     monkeypatch.setenv("BACKEND_URL", "http://example.com")
     monkeypatch.setenv("FEEDER_ID", "feeder-123")
     monkeypatch.setenv("HMAC_SECRET", "test-secret")
-    monkeypatch.setenv("USE_GZIP", "0")
+    monkeypatch.setenv("USE_GZIP", "1" if use_gzip else "0")
 
     sys.modules.pop("forward", None)
     forward_mod = importlib.import_module("forward")
@@ -95,6 +101,13 @@ def test_send_once_uses_feeder_signature_header(tmp_path, monkeypatch):
     assert headers[forward_mod.SIGNATURE_HEADER.lower()] == expected_signature
     assert headers["user-agent"] == "touchway-adsb-forwarder/1.0"
     assert "x-adsb-signature" not in headers
+    sent_body = captured["request"].data
+    if use_gzip:
+        assert headers["content-encoding"] == "gzip"
+        assert gzip.decompress(sent_body) == expected_raw
+    else:
+        assert "content-encoding" not in headers
+        assert sent_body == expected_raw
 
 
 def test_resolve_feeder_id_falls_back_to_file(tmp_path, monkeypatch, capsys):
@@ -150,7 +163,102 @@ def test_send_once_http_error_logs_context(tmp_path, monkeypatch, capsys):
     assert result is False
     assert "http error 404 Not Found" in captured.err
     assert "http://example.com/api" in captured.err
-    assert "route not found" in captured.err
+    assert "route not found" not in captured.err
+    assert response_body.closed
+    assert "BACKEND_URL" in captured.err
+
+
+@pytest.mark.parametrize("status", [400, 404, 429, 500, 503])
+def test_send_once_closes_http_error_without_reading_body(
+    tmp_path, monkeypatch, capsys, status
+):
+    sample = tmp_path / "aircraft.json"
+    sample.write_text('{"aircraft": []}', encoding="utf-8")
+    monkeypatch.setenv("SOURCE_FILE", str(sample))
+    monkeypatch.setenv("BACKEND_URL", "http://example.com/api")
+    monkeypatch.setenv("FEEDER_ID", "feed-123")
+
+    sys.modules.pop("forward", None)
+    forward_mod = importlib.import_module("forward")
+
+    class UnreadableBody(io.BytesIO):
+        read_calls = 0
+
+        def read(self, *args, **kwargs):
+            self.read_calls += 1
+            raise AssertionError("HTTP error bodies must not be read")
+
+    response_body = UnreadableBody()
+    http_error = error.HTTPError(
+        "http://example.com/api", status, "Rejected", None, response_body
+    )
+
+    def fake_urlopen(*args, **kwargs):
+        raise http_error
+
+    monkeypatch.setattr(forward_mod.request, "urlopen", fake_urlopen)
+
+    assert forward_mod.send_once() is False
+    assert response_body.read_calls == 0
+    assert response_body.closed
+    captured = capsys.readouterr()
+    assert f"http error {status} Rejected" in captured.err
+    assert "feeder=feed-123, aircraft=0" in captured.err
+    assert "BACKEND_URL" in captured.err
+
+
+def test_send_once_http_error_without_body(tmp_path, monkeypatch, capsys):
+    sample = tmp_path / "aircraft.json"
+    sample.write_text('{"aircraft": []}', encoding="utf-8")
+    monkeypatch.setenv("SOURCE_FILE", str(sample))
+    monkeypatch.setenv("BACKEND_URL", "http://example.com/api")
+    monkeypatch.setenv("FEEDER_ID", "feed-123")
+
+    sys.modules.pop("forward", None)
+    forward_mod = importlib.import_module("forward")
+    http_error = error.HTTPError(
+        "http://example.com/api", 503, "Unavailable", None, None
+    )
+
+    def fake_urlopen(*args, **kwargs):
+        raise http_error
+
+    monkeypatch.setattr(forward_mod.request, "urlopen", fake_urlopen)
+
+    assert forward_mod.send_once() is False
+    assert "http error 503 Unavailable" in capsys.readouterr().err
+
+
+def test_send_once_http_error_close_failure_preserves_context(
+    tmp_path, monkeypatch, capsys
+):
+    sample = tmp_path / "aircraft.json"
+    sample.write_text('{"aircraft": []}', encoding="utf-8")
+    monkeypatch.setenv("SOURCE_FILE", str(sample))
+    monkeypatch.setenv("BACKEND_URL", "http://example.com/api")
+    monkeypatch.setenv("FEEDER_ID", "feed-123")
+
+    sys.modules.pop("forward", None)
+    forward_mod = importlib.import_module("forward")
+    response_body = io.BytesIO()
+    http_error = error.HTTPError(
+        "http://example.com/api", 503, "Unavailable", None, response_body
+    )
+
+    def fake_urlopen(*args, **kwargs):
+        raise http_error
+
+    def failing_close():
+        response_body.close()
+        raise OSError("close failed")
+
+    monkeypatch.setattr(forward_mod.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(http_error, "close", failing_close)
+
+    assert forward_mod.send_once() is False
+    captured = capsys.readouterr()
+    assert "failed to close HTTP error response: close failed" in captured.err
+    assert "http error 503 Unavailable" in captured.err
     assert "BACKEND_URL" in captured.err
 
 

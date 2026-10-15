@@ -92,32 +92,32 @@ def send_once():
             print(f"[forward] {r.status} aircraft={len(payload['aircraft'])}")
             return True
     except error.HTTPError as http_err:
-        body_preview = ""
-        try:
-            body_bytes = http_err.read() if http_err.fp else b""
-        except Exception as body_exc:  # pragma: no cover - defensive logging only
-            body_preview = f"<failed to read error body: {body_exc}>"
-        else:
-            if body_bytes:
-                decoded = body_bytes.decode("utf-8", errors="replace")
-                truncated = decoded[:500]
-                if len(decoded) > 500:
-                    truncated += "... (truncated)"
-                body_preview = truncated
+        # Error bodies are untrusted and unnecessary for forwarding. Close
+        # without reading: even a bounded read can stall on a slow stream.
+        if http_err.fp is not None:
+            try:
+                http_err.close()
+            except OSError as close_exc:
+                print(
+                    "[forward] failed to close HTTP error response: "
+                    f"{close_exc}",
+                    file=sys.stderr,
+                )
 
         message = (
-            f"[forward] http error {http_err.code} {http_err.reason} while POSTing {http_err.url or URL} "
-            f"(feeder={FEEDER or '<unset>'}, aircraft={len(payload['aircraft'])}, timeout={TIMEOUT}s, gzip={'on' if USE_GZIP else 'off'})"
+            f"[forward] http error {http_err.code} {http_err.reason} "
+            f"while POSTing {http_err.filename or URL} "
+            f"(feeder={FEEDER or '<unset>'}, "
+            f"aircraft={len(payload['aircraft'])}, timeout={TIMEOUT}s, "
+            f"gzip={'on' if USE_GZIP else 'off'})"
         )
         print(message, file=sys.stderr)
 
         suggestion = (
-            "[forward] hint: verify BACKEND_URL matches a valid endpoint and that the backend allows POST requests for this path."
+            "[forward] hint: verify BACKEND_URL matches a valid endpoint "
+            "and that the backend allows POST requests for this path."
         )
         print(suggestion, file=sys.stderr)
-
-        if body_preview:
-            print(f"[forward] response body: {body_preview}", file=sys.stderr)
 
         return False
     except error.URLError as url_err:
