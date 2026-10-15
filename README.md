@@ -215,6 +215,9 @@ If `FEEDER_ID` is omitted, the forwarder falls back to `/var/cache/piaware/feede
 - Uses `ProtectHome=yes`.
 - Uses read-only access to `/run/dump1090-fa` and `/var/cache/piaware`.
 - Supports HMAC signing so the backend can verify authenticity.
+- HTTP errors log status and request context, then close the response without
+  reading its body. This prevents large or slow error bodies from consuming
+  feeder memory or blocking the next batch; body previews are omitted.
 
 ### HMAC request signing
 
